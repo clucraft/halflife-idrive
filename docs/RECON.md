@@ -155,7 +155,8 @@ Read at xash3d-fwgs `11ed246c` and hlsdk-portable `89e83b92` (both 2026-11-08). 
 
 - Supported as far as the source shows: the new `liblist.gam` keys are parsed, the entity limit was raised for it, and hlsdk-portable `master` picks the 320/640/1280/2560 HUD sprites.
 - The tracker's "doesn't work with anniversary assets" report (xash3d-fwgs issue 1894) is Valve's Windows `client.dll` failing to load. It does not apply to us.
-- No report of a Linux problem with this data was found. Not yet tried here; Phase 1 does that.
+- No report of a Linux problem with this data was found.
+- **Tried in Phase 1 on the PC:** the menu, `c0a0`, `c1a0`, the HUD and a save all work with this data (BUILD.md). No need to switch Steam to the legacy branch.
 
 ### Game libraries
 
@@ -164,10 +165,10 @@ Read at xash3d-fwgs `11ed246c` and hlsdk-portable `89e83b92` (both 2026-11-08). 
 
 ### Build
 
-- `./waf configure -8 ...`; bundled copies of the codecs with `--enable-bundled-deps`. The bundled waf wants Python 3; whether Ubuntu 18.04's Python 3.6 is new enough is unverified.
+- `./waf configure -8 ...`; bundled copies of the codecs with `--enable-bundled-deps`. The bundled waf wants Python 3; Ubuntu 18.04's Python 3.6 is new enough (built in Phase 1).
 - Link-time optimisation uses a flag GCC 7 does not have, so no `--enable-lto` in the 18.04 container.
 - The menu library and the game libraries are C++. Ubuntu 18.04's libstdc++ is newer than the unit's 6.0.24, so it must be linked statically, as plex-idrive does.
-- Fonts: the unit has freetype but no fontconfig; the engine's `--enable-stbtt` option avoids both. How the menu finds a font then is unverified.
+- Fonts: the unit has freetype but no fontconfig; the engine's `--enable-stbtt` option avoids both. The menu then loads its font from the engine's own `extras.pk3` (seen working in Phase 1).
 - Outputs: launcher `xash3d`, `libxash.so`, `filesystem_stdio.so`, renderer libraries, the menu library, and `extras.pk3`.
 
 ### Running without a screen
@@ -177,7 +178,9 @@ Read at xash3d-fwgs `11ed246c` and hlsdk-portable `89e83b92` (both 2026-11-08). 
 
 ### Behaviour that matters for a locked-down service
 
-- A non-SDL client has no SIGTERM handler: it dies without saving config. Our backend must install one that calls `CL_RequestQuit`.
+- A non-SDL client has no SIGTERM handler: it dies without saving config and leaves its frame file behind (seen in Phase 1). Our backend installs one and quits from the main loop.
+- A client reads no console commands from stdin; only the dedicated server does. Our backend adds that behind `-stdincmds`, as the service's way to talk to the engine.
+- `extras.pk3` need not sit in the game folder: `XASH3D_EXTRAS_PAK1` names it, so it can stay in the install folder.
 - The crash handler catches SIGSEGV, SIGABRT, SIGBUS and SIGILL, prints a backtrace and then shuts down normally.
 - It writes an id file under `$HOME` unless `HOME` is unset, and reads `/etc/machine-id`, disk ids and MAC addresses to build that id.
 - It initialises HTTP and master-server code at start. The service's user has no route out, so this should fail quietly; to be watched.
