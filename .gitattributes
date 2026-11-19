@@ -1,0 +1,11 @@
+# Shell scripts are piped to the head unit's shell: keep them LF on Windows too.
+*.sh        text eol=lf
+*.service   text eol=lf
+*.json      text eol=lf
+*.js        text eol=lf
+*.c         text eol=lf
+*.h         text eol=lf
+*.md        text
+*.png       binary
+*.tgz       binary
+*.tar.gz    binary
