@@ -1,0 +1,107 @@
+diff --git a/common/backends.h b/common/backends.h
+index 1003ad46..33470b9a 100644
+--- a/common/backends.h
++++ b/common/backends.h
+@@ -22,6 +22,7 @@ GNU General Public License for more details.
+ #define VIDEO_FBDEV   3
+ #define VIDEO_DOS     4
+ #define VIDEO_PS4     5
++#define VIDEO_MGU     6 // BMW iDrive 7 head unit: frames go to a file mgu-render shows, see engine/platform/mgu
+ 
+ // audio backends (XASH_SOUND)
+ #define SOUND_NULL     0
+diff --git a/common/defaults.h b/common/defaults.h
+index a48e47f5..56af3eb4 100644
+--- a/common/defaults.h
++++ b/common/defaults.h
+@@ -34,6 +34,10 @@ SETUP BACKENDS DEFINITIONS
+ 		#define XASH_VIDEO     VIDEO_SDL
+ 		#define XASH_INPUT     INPUT_SDL
+ 		#define XASH_SOUND     SOUND_SDL
++	#elif XASH_MGU // BMW iDrive 7 head unit: no SDL, no kernel input layer, see engine/platform/mgu
++		#define XASH_VIDEO     VIDEO_MGU
++		#define XASH_INPUT     INPUT_NULL
++		#define XASH_SOUND     SOUND_ALSA
+ 	#elif XASH_LINUX // we are building for Linux without SDL, only framebuffer is supported for now
+ 		#define XASH_VIDEO     VIDEO_FBDEV
+ 		#define XASH_INPUT     INPUT_EVDEV
+diff --git a/engine/platform/platform.h b/engine/platform/platform.h
+index 4b1e40c6..af2b943b 100644
+--- a/engine/platform/platform.h
++++ b/engine/platform/platform.h
+@@ -194,6 +194,11 @@ void Linux_SetTimer( float time );
+ int Linux_GetProcessID( void );
+ #endif
+ 
++#if XASH_MGU // platform/mgu
++void MGU_Init( void );
++void MGU_Shutdown( void );
++#endif
++
+ static inline void Platform_Init( qboolean con_showalways )
+ {
+ #if XASH_POSIX
+@@ -229,10 +234,18 @@ static inline void Platform_Init( qboolean con_showalways )
+ #if XASH_SAILFISH && !XASH_DEDICATED
+ 	Sailfish_Init( );
+ #endif
++
++#if XASH_MGU
++	MGU_Init( );
++#endif
+ }
+ 
+ static inline void Platform_Shutdown( void )
+ {
++#if XASH_MGU
++	MGU_Shutdown( );
++#endif
++
+ #if XASH_SAILFISH && !XASH_DEDICATED
+ 	Sailfish_Shutdown( );
+ #endif
+@@ -400,7 +413,7 @@ static inline qboolean Platform_MouseConnected( void ) { return true; }
+ #if XASH_SDL || XASH_DOS
+ void Platform_RunEvents( void );
+ void Platform_MouseMove( float *x, float *y );
+-#elif XASH_PS4 // the gamepad, keyboard and mouse are polled in Platform_RunEvents
++#elif XASH_PS4 || XASH_MGU // the gamepad, keyboard and mouse are polled in Platform_RunEvents
+ void Platform_RunEvents( void );
+ void Platform_MouseMove( float *x, float *y );
+ #else
+diff --git a/engine/wscript b/engine/wscript
+index dafbf490..704f5d8c 100644
+--- a/engine/wscript
++++ b/engine/wscript
+@@ -43,6 +43,9 @@ def options(opt):
+ 	grp.add_option('--enable-fbdev', action = 'store_true', dest = 'FBDEV_SW', default = False,
+ 		help = 'build fbdev-only software-only engine')
+ 
++	grp.add_option('--enable-mgu', action = 'store_true', dest = 'MGU', default = False,
++		help = 'build for the BMW iDrive 7 head unit: no SDL, video to an mgu-render frame file')
++
+ 	grp.add_option('--enable-custom-swap', action = 'store_true', dest = 'CUSTOM_SWAP', default = False,
+ 		help = 'enable custom swap allocator. For devices with no swap support')
+ 
+@@ -125,6 +128,10 @@ def configure(conf):
+ 		elif conf.env.DEST_OS == 'ps4':
+ 			# no SDL, video, sound and input are in platform/ps4
+ 			conf.env.LIB_PS4CLIENT_SYS = ['SceImeDialog', 'SceCommonDialog', 'SceAudioIn', 'SceAudioOut', 'ScePad', 'SceUserService', 'SceSysmodule', 'SceKeyboard', 'SceMouse']
++		elif conf.env.DEST_OS == 'linux' and conf.options.MGU:
++			# no SDL, video and input are in platform/mgu, sound is platform/linux/s_alsa.c
++			conf.check_cc(lib='asound')
++			conf.env.MGU = True
+ 		elif conf.env.DEST_OS == 'linux' and conf.options.FBDEV_SW:
+ 			conf.check_cc(lib='asound')
+ 		elif conf.options.SDL12: # TODO: move to sdl2.py
+@@ -283,6 +290,10 @@ def build(bld):
+ 			source += bld.path.ant_glob(['platform/sdl%d/*.c' % bld.env.XASH_SDL])
+ 			defines += ['XASH_SDL=%d' % bld.env.XASH_SDL]
+ 
++		if bld.env.MGU:
++			source += bld.path.ant_glob('platform/mgu/*.c')
++			defines += ['XASH_MGU=1']
++
+ 		# GPU device for the OpenGL layer in ref_gl, see ref/gl/gnm_shim
+ 		if bld.env.DEST_OS == 'ps4':
+ 			libs += ['opengnm', 'PS4CLIENT_SYS']

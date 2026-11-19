@@ -9,3 +9,7 @@
 *.png       binary
 *.tgz       binary
 *.tar.gz    binary
+*.patch     text eol=lf
+*.env       text eol=lf
+*.py        text eol=lf
+Dockerfile  text eol=lf

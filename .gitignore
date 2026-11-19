@@ -30,15 +30,15 @@ sw.dll
 # ---------------------------------------------------------------------------
 # Build output and scratch
 # ---------------------------------------------------------------------------
-build/
-out/
-dist/
+/build/
+/out/
+/dist/
 node_modules/
 *.o
 *.obj
 *.log
 *.tmp
-frames/
+/frames/
 *.ppm
 *.tga
 
