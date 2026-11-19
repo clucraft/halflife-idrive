@@ -44,4 +44,6 @@ sec modules
 lsmod
 
 sec kernel-log
-dmesg | grep -i -E 'usb|scsi|sd[a-z]|fat|ntfs|ext4|mount|storage|hub|xhci|uas|fuse' | head -400
+# No line limit here: the newest lines are the ones a plug event adds, and
+# "head" would keep the oldest. The kernel's buffer is small; trim on the PC.
+dmesg | grep -i -E 'usb|scsi|sd[a-z]|fat|ntfs|ext4|mount|storage|hub|xhci|uas|fuse'
