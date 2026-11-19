@@ -1,0 +1,57 @@
+# ---------------------------------------------------------------------------
+# Valve game data. Never committed, never put in a Store package.
+# Bring your own: the game is read from a USB stick at run time.
+# ---------------------------------------------------------------------------
+valve/
+valve_hd/
+valve_downloads/
+gamedata/
+*.bsp
+*.wad
+*.pak
+*.mdl
+*.spr
+*.sav
+*.dem
+*.hpk
+liblist.gam
+steam.inf
+
+# Valve's own binaries, in case a game folder is ever copied next to the repo
+hl.dll
+hl.so
+hl.dylib
+client.dll
+client.so
+client.dylib
+hw.dll
+sw.dll
+
+# ---------------------------------------------------------------------------
+# Build output and scratch
+# ---------------------------------------------------------------------------
+build/
+out/
+dist/
+node_modules/
+*.o
+*.obj
+*.log
+*.tmp
+frames/
+*.ppm
+*.tga
+
+# Head-unit access: keys and addresses stay out of the repo
+*.pem
+*.key
+id_*
+.env
+.env.*
+local.config.json
+
+# Editors and OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
