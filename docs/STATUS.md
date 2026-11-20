@@ -2,7 +2,7 @@
 
 Last updated 2026-11-20.
 
-- Phase 0 (recon): the car was probed on 2026-11-20, read-only ([RECON.md](RECON.md), section 10). Two reads are left: one with the stick and the pad plugged in, and the free space (`df`, waiting for the owner's OK).
+- Phase 0 (recon): the car was probed on 2026-11-20, read-only ([RECON.md](RECON.md), section 10). A second read with the stick and the pad plugged in followed the same day. One read is left: the free space (`df`, waiting for the owner's OK).
 - Phase 1 (PC build): finished.
 - Phase 2 (backend, service, app, Store package, gamepad): finished on the PC. Details in [BUILD.md](BUILD.md).
 - Phase 3 (first run on the car): prepared, not started. Nothing is installed. The steps, what each writes on the head unit and how to undo it are under "Phase 3, step by step"; each waits for the owner.
@@ -19,8 +19,9 @@ Read-only, with the car awake on Wi-Fi and nothing plugged into its USB ports. T
 - **About one and a half of the four cores are busy with only the HMI up.**
 - **No thermal zone.** The CPU's own sensor read 54 to 57 C at rest and names 110 C as its limit. The service read thermal zones only; it now reads this sensor.
 - **`TasksMax` is not enforced on this car** (no `pids` controller). `CPUQuota`, `MemoryLimit` and `LimitCORE` are what limits the service here.
-- **A stick:** the modules for FAT, exFAT and NTFS are on the unit and a udev rule has udisks mount sticks at `/media/<volume name>`. How it is mounted (read-only or not, readable by `nobody` or not) is unknown until a stick is in.
-- **The owner's stick** (prepared 2026-11-20) is 57 GB, **exFAT**, without a volume name. The unit has an exFAT module, but the one owner who documented sticks had only tried FAT32. Whether this unit mounts it, and where without a name, is what the read with the stick in the car answers. If it does not, FAT32 is the fallback, and formatting is the owner's to do.
+- **The owner's stick** (57 GB, exFAT, no volume name, with `Half-Life\valve` on it) **is mounted by the car and readable there**: at `/media/<volume serial>`, by the unit's exFAT driver, with every file readable by everyone, names matched without regard to case. So the service's user can read the game, and the service's finder will see it.
+- **The stick is mounted read-only.** Saves and config therefore go to the tool's folder on the head unit (decision 3), not to the stick.
+- **The pad is seen** behind the owner's hub (`045e:02ea`), and its node is open to the group `mgu_usb`, which the service's unit asks for.
 
 ## Works on the PC
 
@@ -48,7 +49,7 @@ Everything of this project. In particular:
 - The iDrive controller in the game view (the gate it needs is installed), the long press to leave the game, and touch.
 - The parked gate with real signals, with the ignition in each state.
 - Temperature under load. The service logs it with the frame rate every 15 seconds while a game runs; nobody has documented what the unit does when it gets hot.
-- Reading the game from a stick as this unit mounts it.
+- The engine reading the game from the stick. The unit mounts it readable for the service's user; nothing of this project has read from it there, and how long a map takes to load from it is unknown.
 - Input delay of the pad. Not measured anywhere.
 
 ## Phase 3, step by step
@@ -58,7 +59,7 @@ Each step waits for the owner. Steps 1 to 3 write nothing on the head unit.
 | | Step | Who | Writes on the head unit | Undo |
 |---|---|---|---|---|
 | 1 | **Done 2026-11-20.** `valve` (4,250 files, 506 MiB) copied from the Steam folder to the stick as `Half-Life\valve`, and every file compared with the source by SHA-256: identical. The stick was empty and was not formatted. The service's own finder, pointed at it on the PC, finds the game there | Claude | Nothing | Delete the folder from the stick |
-| 2 | Stick and pad into the car; one more run of `tools/probe/20-usb-snapshot.sh` | Owner plugs, Claude reads | Nothing | - |
+| 2 | **Done 2026-11-20.** Stick and pad into the car; one more run of `tools/probe/20-usb-snapshot.sh` and two `ls` of the stick. The stick is mounted read-only and readable by everyone; the pad is seen (RECON.md, section 10, "Second read") | Owner plugged, Claude read | Nothing | - |
 | 3 | `df` once, for the free space under `/var/opt` | Claude, with the owner's OK (it is not on the ten-command list) | Nothing | - |
 | 4 | Push the commits made since the last push | Claude, with the owner's OK | Nothing | - |
 | 5 | Let the Store read the repository: make it public, or give the Store a token | Owner's choice | Nothing | Make it private again |
@@ -103,14 +104,15 @@ If something goes wrong: the game is a child of the service and the service is o
 Waiting on the owner:
 
 1. ~~The stick's drive letter on the PC, for the copy.~~ Done.
-2. Stick and pad plugged into the car, for the second read.
+2. ~~Stick and pad plugged into the car, for the second read.~~ Done.
 3. OK to run `df` on the unit (it is not on the ten-command list).
-4. Public repository, or a token for the Store?
-5. Are saves under `/var/opt` acceptable if the stick turns out read-only (decision 3)?
+4. OK to push the commits made since the last push.
+5. Public repository, or a token for the Store?
+6. The stick is mounted read-only, so saves go to `/var/opt/clucraft-halflife/state/base` on the head unit (0.1 MB in the PC runs; deleted when the tool is uninstalled). Is that acceptable (decision 3)? The other way is no saves at all.
 
 Answered by the probe: the controller gate is installed; the unit has `scp`, though tar over ssh stays the plan.
 
-Still open after the probe: how a stick is mounted here; the Mesa version (Phase 4); what the unit does when it gets hot.
+Still open after the probe: the free space; the Mesa version (Phase 4); what the unit does when it gets hot.
 
 ## Risks carried forward
 
@@ -118,4 +120,4 @@ Still open after the probe: how a stick is mounted here; the Mesa version (Phase
 - The HMI alone keeps about a core and a half busy. The software renderer may not hold 30 frames a second beside it. Its picture is coarse (16-bit colour inside). The GPU renderer stays the plan for Phase 4.
 - SmartXbar's buffer is 64 ms. A frame that takes longer than that makes a gap in the sound.
 - plex-idrive and this app use the same sound source (287). Only one of them can have the speakers at a time; this app takes them while a game is on the screen and gives them back.
-- Head-unit facts that neither the probe nor the owner's other apps cover still come from another owner's car with older firmware: chiefly how a stick is mounted, and SmartXbar's behaviour when the route is not connected.
+- Head-unit facts that neither the probe nor the owner's other apps cover still come from another owner's car with older firmware: chiefly SmartXbar's behaviour when the route is not connected.

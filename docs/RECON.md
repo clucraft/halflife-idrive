@@ -120,9 +120,10 @@ Consequences:
 - **Mounting** [other car]: udisks2 mounts sticks at `/media/<label or uuid>`, `ro,nosuid,nodev,noexec`. FAT32 appears with every file world-readable. The kernel has vfat, Tuxera exFAT and NTFS, and ext4; exFAT is still listed as untried by that owner.
 - **Discovery** [code]: the Store and Vizualyse read `/proc/mounts` for entries under `/media`; nes-idrive looks in `/media/*`.
 - **Writing**: not as mounted. Vizualyse remounts the stick read-write as root; that changes a system mount and is outside this project's rules unless the owner asks for it.
-- **On this car** [car]: with no stick plugged in, no USB storage driver is registered and `/media` is an empty tmpfs. The modules are on the unit (`usb-storage`, `sd_mod`, `fat`, Tuxera `texfat` and `tntfs`) and load on plug-in. A udev rule tells udisks to mount at the shared place, `/media/<volume name>`. The mount's options, and whether `nobody` can read the files, are not known until a stick is in the car.
+- **On this car** [car]: with no stick plugged in, no USB storage driver is registered and `/media` is an empty tmpfs. The modules are on the unit (`usb-storage`, `sd_mod`, `fat`, Tuxera `texfat` and `tntfs`) and load on plug-in. A udev rule tells udisks to mount at the shared place, `/media/<volume name>`. 
+- **The owner's stick in the car** [car, 2026-11-20]: an exFAT stick without a volume name is mounted at `/media/<volume serial>` (four hex digits, a dash, four more) by the Tuxera driver, type `texfat`, with `ro,nosuid,nodev,uid=2010,gid=2010,umask=0000`. Read-only, as on the other car. Every folder shows as `drwxrwxrwx` and every file as `-rwxrwxrwx`, owned by the unit's user `con_2010`, so `nobody` can read all of it. Names are matched without regard to case (`MAPS/C0A0.BSP` finds `maps/c0a0.bsp`). The stick sat behind the owner's own USB hub.
 
-Consequences: the game data can be read from the stick by `nobody`, if this unit mounts sticks like the other one does. Saves and config cannot go on the stick as mounted. Game libraries cannot run from it either (noexec), which is fine because they ship in the tool.
+Consequences: the game data can be read from the stick by `nobody`; this unit mounts the owner's stick readable by everyone. Saves and config cannot go on the stick as mounted. Game libraries cannot run from it either (noexec), which is fine because they ship in the tool.
 
 ## 8. Engine: Xash3D FWGS and hlsdk-portable
 
@@ -319,7 +320,26 @@ Everything in this table is **[car]**.
 5. **About one and a half cores are busy before a game starts.** The engine's main loop is one thread, so this does not rule out 30 frames a second, but the service's `CPUQuota=150%` is close to what is left. Phase 3 has to measure it.
 6. Nothing the staged files need is missing: libraries, the loader's place, the CPU's instruction set, Node, the users and groups, the sound route's names, the Store's version.
 
-Still unanswered, because a read-only probe with nothing plugged in cannot answer it: how this unit mounts a stick (options, and whether `nobody` can read it), and what the pad's node looks like to `nobody`.
+Still unanswered after that first read, because nothing was plugged in: how this unit mounts a stick, and what the pad's node looks like. The second read answered both.
+
+### Second read, with the stick and the pad plugged in (2026-11-20)
+
+`20-usb-snapshot` once more, and two `ls` of the stick. Everything here is **[car]**.
+
+| | This car |
+|---|---|
+| What was plugged in | The owner's USB hub on the unit's port, and on it: the stick (SanDisk, 57 GB, exFAT, no volume name), the Xbox One S pad, a card reader with empty slots and a network adapter. No driver binds to the pad or the network adapter |
+| The stick | `usb-storage` and `sd` load on plug-in, then `texfat`. Mounted two seconds after it was seen, at `/media/<volume serial>`: `texfat ro,nosuid,nodev,relatime,uid=2010,gid=2010,umask=0000`. **Read-only.** No `noexec` among the options |
+| Its files | `Half-Life/valve` is there. Folders `drwxrwxrwx`, files `-rwxrwxrwx`, owner `con_2010`: readable by `nobody`. Names match without regard to case |
+| The pad | `045e:02ea`, full speed, 500 mA, three interfaces of class `ff/47/d0`, behind the hub. Its node is `crw-rw---- root:mgu_usb` like every other, so a process in the group `mgu_usb` can open it |
+| The card reader's empty slots | Show as block devices of size 0 and are not mounted. The service looks only at what is mounted under `/media` |
+
+What it means for the port:
+
+1. **The game data is where the service looks,** readable by the user it runs as. The service's finder takes any name under `/media`, so the missing volume name does not matter.
+2. **Saves go to the head unit** (`/var/opt/clucraft-halflife/state/base`), because the stick is mounted read-only. Making it writable would mean remounting a system mount, which this project does not do.
+3. **A hub is fine** for the stick and for the pad as far as the kernel is concerned. Reading the pad through this service is still untested.
+4. Nothing in the code had to change.
 
 ## 11. What this changes in the plan
 
@@ -343,8 +363,8 @@ Still unanswered, because a read-only probe with nothing plugged in cannot answe
 
 For the probe (answers of 2026-11-20 in section 10):
 
-1. Does this unit mount a USB stick the way the other car does: where, which filesystem, which options, readable by `nobody`? **Open.** It needs a stick in the car and one more run of `20-usb-snapshot`.
-2. Does a hub change anything for the pad or the stick? **Open**, same reason.
+1. ~~Does this unit mount a USB stick the way the other car does: where, which filesystem, which options, readable by `nobody`?~~ Yes: `/media/<volume serial>`, exFAT through the Tuxera driver, read-only, readable by everyone.
+2. ~~Does a hub change anything for the pad or the stick?~~ Not for being seen and mounted: both sat behind the owner's hub.
 3. ~~RAM, and how much is available with the HMI up.~~ 5.5 GiB, 2.2 GB available.
 4. ~~EGL platforms and libstdc++ version on this firmware.~~ Wayland and GBM; 6.0.24. The Mesa version is **open** (Phase 4).
 5. ~~Group and mode of `/dev/dri/renderD128`.~~ `crw-rw---- root:video`.
