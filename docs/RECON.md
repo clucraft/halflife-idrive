@@ -2,13 +2,13 @@
 
 Phase 0 of the port. What we know before writing any engine code, where each fact comes from, and what is still a guess.
 
-> **Nothing in this document has been measured on the car by this project yet.** The head-unit facts come from reading the reference repositories and from a controller probe done for nes-idrive on 2026-11-19. The probe batches in `tools/probe/` have only run on the PC. Section 10 is filled in when they run on the car.
+> **Read from the car, read-only, on 2026-11-20:** the probe in section 10. Nothing of this project has run on the car yet. Where sections 3 to 9 still carry another car's facts, section 10 says what this car answered.
 
 Sources are marked like this:
 
 | Mark | Meaning |
 |---|---|
-| **[car]** | Read from this head unit, read-only. So far only the nes-idrive controller probe. |
+| **[car]** | Read from this head unit, read-only: the nes-idrive controller probe (2026-11-19) and this project's probe (2026-11-20, section 10). |
 | **[owner]** | The owner reports it from this car, from running another of their apps there. |
 | **[other car]** | Another owner documented it from their own car. Firmware and kernel differ from ours (theirs `4.14.147-apl`, ours `4.14.198-apl`). |
 | **[code]** | What reference code does. It shows what its author expected of the unit, not that it ran there. |
@@ -44,23 +44,23 @@ Repositories read: clucraft/plex-idrive, nes-idrive and swarm-idrive; cauliflowe
 | Raw USB works: `/dev/bus/usb/<bus>/<dev>`, mode `crw-rw----`, `root:mgu_usb` | [car] |
 | An Xbox One S pad (045e:02ea) enumerates at full speed, 500 mA, behind the unit's hub; no driver binds | [car] |
 | The unit can power-cycle itself mid-session when the car sleeps and wakes | [car] |
-| Intel Atom A3960, 4 cores; about 5.6 GB RAM, not 8; zram swap | [other car] |
-| GPU Intel HD Graphics 505 (`8086:5a84`, Gen9, 18 execution units), memory shared with the CPU; passively cooled | [other car] |
+| Intel Atom A3960, 4 cores; about 5.6 GB RAM, not 8; zram swap | [other car]; [car] the same |
+| GPU Intel HD Graphics 505 (`8086:5a84`, Gen9, 18 execution units), memory shared with the CPU; passively cooled | [other car]; [car] the same PCI id and driver |
 | Mesa 19.0.6 with the `i965` driver only: OpenGL ES 3.2, EGL 1.4, no Vulkan, no X11. libdrm 2.4.96, libwayland 1.15 | [other car] |
-| EGL platforms are Wayland and GBM only. No surfaceless platform, and GBM offers no pbuffers | [other car] |
-| `/dev/dri/renderD128` is group `video`. `/dev/dri/card0` belongs to the compositor and must not be opened | [other car] |
-| glibc 2.27; libstdc++ 6.0.24; the loader is only at `/lib/ld-linux-x86-64.so.2`, there is no `/lib64` | [other car]; [code] build gates in plex-idrive and mgu-render |
+| EGL platforms are Wayland and GBM only. No surfaceless platform, and GBM offers no pbuffers | [other car]; [car] the same two platform names in libEGL |
+| `/dev/dri/renderD128` is group `video`. `/dev/dri/card0` belongs to the compositor and must not be opened | [other car]; [car] both nodes are `crw-rw---- root:video` |
+| glibc 2.27; libstdc++ 6.0.24; the loader is only at `/lib/ld-linux-x86-64.so.2`, there is no `/lib64` | [car] |
 | The kernel refuses modules not signed by BMW, and has no 32-bit emulation | [other car] |
-| systemd 237; unit output goes nowhere unless the unit asks for the journal; the journal is in RAM | [other car] |
-| `core_pattern` pipes to BMW's crash handler | [other car] |
+| systemd 237; unit output goes nowhere unless the unit asks for the journal; the journal is in RAM | [other car]; [car] systemd 237, `DefaultStandardOutput=null` |
+| `core_pattern` pipes to BMW's crash handler | [car] `/usr/bin/dlt-cdh` |
 | freetype is present; fontconfig, NSS and SDL are not | [other car] |
-| Centre display 1920x720 at 60 Hz | [doc] Store, kit; [other car] |
+| Centre display 1920x720 at 60 Hz | [doc] Store, kit; [other car]; [car] the screen runs 1920x720 |
 | System compositor "Winston": `XDG_RUNTIME_DIR=/run/wayland`, socket `wayland-0`, group `mgu_wayland`, ivi-shell, no xdg-shell | [code] mgu-render; [other car] |
 | Root filesystem read-only; `/var/opt` writable and kept across firmware updates; `/run`, `/tmp`, `/dev/shm` are tmpfs and empty after every start | [doc]; [other car] |
-| A 2.5" disk with a writable share of about 90 GB at `/var/opt/hdshare` | [doc] kit |
-| Node 8.16 at `/usr/bin/node`; apps run one process each under their own uid, all in group `tm_oap_app` | [code]; [doc] |
-| `scp` and `sftp` are missing in some firmware builds; file transfer is tar over ssh | [doc] kit |
-| Thermal behaviour, trip points, throttling | unknown everywhere |
+| A 2.5" disk with a writable share of about 90 GB at `/var/opt/hdshare` | [doc] kit. Not on this car: `/var/opt/hdshare` is the eMMC's own 36 GiB `/var/opt` partition [car] |
+| Node 8.16 at `/usr/bin/node`; apps run one process each under their own uid, all in group `tm_oap_app` | [code]; [doc]; [car] Node 8.16.2 |
+| `scp` and `sftp` are missing in some firmware builds; file transfer is tar over ssh | [doc] kit. This car has `scp` and `tar` [car] |
+| Temperature | [car] no thermal zone; the CPU's own sensor under hwmon reads 54 to 57 C at rest and names 110 C as its limit. Behaviour under load is still unknown |
 
 Standing rules for this unit, from the owner's SSH notes kept with nes-idrive: read-only; no remount; do not stop, start, restart or kill anything; do not reboot; no kernel modules; no writes to `/sys` or `/proc`. Only `cat ls dmesg zcat grep readlink uname lsmod head hexdump` run without asking; anything else is shown to the owner first.
 
@@ -120,7 +120,7 @@ Consequences:
 - **Mounting** [other car]: udisks2 mounts sticks at `/media/<label or uuid>`, `ro,nosuid,nodev,noexec`. FAT32 appears with every file world-readable. The kernel has vfat, Tuxera exFAT and NTFS, and ext4; exFAT is still listed as untried by that owner.
 - **Discovery** [code]: the Store and Vizualyse read `/proc/mounts` for entries under `/media`; nes-idrive looks in `/media/*`.
 - **Writing**: not as mounted. Vizualyse remounts the stick read-write as root; that changes a system mount and is outside this project's rules unless the owner asks for it.
-- **On this car** [car]: with no stick plugged in, no USB storage driver was registered. It may load on plug-in. Unverified until the stick test.
+- **On this car** [car]: with no stick plugged in, no USB storage driver is registered and `/media` is an empty tmpfs. The modules are on the unit (`usb-storage`, `sd_mod`, `fat`, Tuxera `texfat` and `tntfs`) and load on plug-in. A udev rule tells udisks to mount at the shared place, `/media/<volume name>`. The mount's options, and whether `nobody` can read the files, are not known until a stick is in the car.
 
 Consequences: the game data can be read from the stick by `nobody`, if this unit mounts sticks like the other one does. Saves and config cannot go on the stick as mounted. Game libraries cannot run from it either (noexec), which is fine because they ship in the tool.
 
@@ -248,7 +248,7 @@ Read at xash3d-fwgs `11ed246c` and hlsdk-portable `89e83b92` (both 2026-11-08). 
 
 ## 10. Probe of the car
 
-Not run yet.
+Run on 2026-11-20 (results below), except `90-free-space`, which waits for the owner's OK for `df`.
 
 The probe is thirteen short batches in `tools/probe/`, each fed to the unit's shell on stdin so that nothing is copied to the car. They use only the ten allowed commands; `tools/probe/check.sh` proves that on the PC by running each batch where no other command exists. `90-free-space.sh` uses `df` and waits for the owner's OK.
 
@@ -277,9 +277,49 @@ What a read-only probe cannot answer:
 - **Whether pad buttons arrive.** That needs the usbfs reader.
 - **Whether the frame file and the sound route work on this car.** Phase 3.
 
-### Results
+### Results (2026-11-20)
 
-Pending.
+The car was awake on the home Wi-Fi, fifteen minutes after a start, with no stick and no pad plugged in. Batches `00` to `11` and `20` ran, one at a time, each read before the next. Nothing was written, started, stopped or loaded. The raw output stays on the PC (`out/probe/`, git-ignored): it carries identifiers of this unit.
+
+Eleven single reads filled gaps the batches left, all with the allowed commands: the smartx ALSA configuration (`cat`), the entries for `nobody` (`grep`), plex-idrive's installed unit and the Store's drop-ins for it (`cat`, `ls`, `head`), the Store's folder and its lists of crash names and installed tools (`ls`, `head`, `cat`), which files mention `/media` (`grep -r -l`), the kernel's module folders for file systems and USB storage (`ls`), two udev rules (`head`), udisks settings (`grep`, nothing there), and the running screen mode (`grep` in the i915 debug file).
+
+Everything in this table is **[car]**.
+
+| | This car |
+|---|---|
+| Firmware | BMW MGU `J18_21w31.5-1-5`, variant `mgu-high`, hardware revision D3. Kernel `4.14.198-apl`, built 2021-04-12 with GCC 7.5; the command line has `module.sig_enforce=1` |
+| CPU | Intel Atom A3960 @ 1.90 GHz, 4 cores, no hyper-threading. `intel_pstate`, governor `powersave`, turbo off; the cores ran at 1.4 to 1.85 GHz when read. SSE4.2, AES, SHA, MOVBE, POPCNT, RDRAND; no AVX, BMI or FMA. The build's `-march=silvermont` asks for nothing this CPU lacks |
+| Load at rest | Load average 1.95 / 3.43 / 2.91. Between two reads eleven seconds apart, 36% of the four cores were busy with only the HMI up: about one and a half cores are taken before a game starts |
+| Memory | 5.5 GiB in all, 2.2 GB available; zram swap of 3 GB, 0.1 GB used |
+| GPU | `8086:5a84`, i915, Gen9 "Broxton". `/dev/dri/renderD128` and `card0` are `crw-rw---- root:video`. GPU clock 100 to 450 MHz, boost 750 |
+| Screen | `HDMI-A-1`, running 1920x720, a primary plane and one overlay plane in ARGB. A second connector is connected but off |
+| Graphics libraries | libEGL, libGLESv2, libgbm, libdrm, libwayland, libva, and the i965 DRI driver through `/etc/alternatives`. libEGL names the platforms Wayland and GBM, and the surfaceless-context extension. The Mesa version was not found (the batch skips symbolic links): open for Phase 4 |
+| C library | glibc 2.27 in `/lib`, the loader only at `/lib/ld-linux-x86-64.so.2`, no `/lib64`. libstdc++ 6.0.24 (GLIBCXX up to 3.4.24), `libgcc_s`, `libasound.so.2`. Every library the staged engine asks for is there |
+| Node | `/usr/bin/node`, v8.16.2 |
+| Compositor and renderers | `winston`; `/run/wayland/wayland-0`, group `mgu_wayland`. `mgu-render` 0.6.23 is running; its socket `/run/mgu-render/render.sock` is `srw-rw---- root:tm_oap_app`. `idrive7-renderd` 2.1.18 is installed beside it. 0.6.23 is before NV12 frame files (0.6.24); the engine writes I420 |
+| Store | `mgu-deploy` 0.8.20 (this tool asks for 0.7.0), Store app 0.9.40, `mgu-inputgate` 1.1.0: **the controller gate is installed**. Tools live in `/var/opt/<id>/versions/<version>` with a `current` link; `clucraft-plex` 0.1.0 and `clucraft-nes-loader` 0.2.2 are there |
+| What the Store adds to a tool's units | A drop-in `zz-mgu-deploy-limits.conf`: `LimitCORE=1`, a start limit, and conditions that keep the unit off in safe mode |
+| Crashes | `core_pattern` is `\|/usr/bin/dlt-cdh %t %p %s %e`; systemd's default core limit is "infinity" and its watchdog 20 s. The Store keeps a list of program names for the crash handler (`nes-usbpipe` and `tvh-player` are on it) and a list of unit names for the recovery manager (`clucraft-plex` and `clucraft-nes-loader` are on it). Both mechanisms of section 9 exist here |
+| cgroups | Version 1, with the controllers `cpu`, `cpuacct` and `memory` only. There is no `pids` controller, so **`TasksMax` in a unit is not enforced on this car**; `CPUQuota` and `MemoryLimit` can be |
+| Sound | One card, `apl_mgu`, whose only hardware PCMs are the Bluetooth ones; the rest goes through SmartXbar. `50-smartx.conf` defines `pcm.smartx` taking a name. The route's shared memory exists: `/dev/shm/smartx_CarLifeMedia_CF_48_STEREO_p_connection` and `_ringbuffer`, `rw-rw---- ent_alsa:mgu_alsa`; `/run/smartx` is `drwxrws--- ent_alsa:mgu_alsa`. No `aplay` |
+| Users and groups | `nobody` is 65534:65534. `mgu_alsa` 917, `mgu_usb` 909, `video` 44, `mgu_wayland` 911 |
+| USB | Nodes are `crw-rw---- root:mgu_usb`. With nothing plugged in: the unit's own hub and a bridge device; drivers `hub`, `usb`, `usbfs` |
+| USB stick | See section 7: the modules and the udisks rule are there, `/media` is empty. How a stick is mounted is still to be seen |
+| Storage | Root is ext4, read-only. `/var/opt` is ext4, writable, a 36 GiB partition of the 119 GiB eMMC, with user and group quotas. `/dev/shm` is a tmpfs anyone may create files in. Free space: not read (`df`) |
+| Temperature | **No thermal zone.** `hwmon0` is `coretemp`: package and cores at 54 to 57 C, with 110 C as both "max" and "critical". Four `Processor` cooling devices, all at state 0 of 3. No throttle counters |
+| Kernel | No `/proc/config.gz`. No HID or input layer, as the earlier probe found. LSMs: capability and yama |
+| plex-idrive's unit, as installed | Runs as root and makes the frame file owned by `nobody`; its player runs as `nobody`. So a frame file owned by `nobody` is what the renderer takes on this car, and that is what this engine writes |
+
+### What the probe changed
+
+1. **Temperature.** The service looked for thermal zones only and would have logged no temperature on this car. It now reads the hwmon sensors too (`temperature` in `service.js`, with a test built from this car's readings).
+2. **`TasksMax=32`** in the service's unit does nothing here. It stays: it is harmless, plex-idrive's unit has one too, and another firmware may have the controller. The limits that count on this car are `CPUQuota`, `MemoryLimit` and `LimitCORE`.
+3. **The controller gate is installed**, so the game view can hold the iDrive controller.
+4. **The screen runs 1920x720**, so 1280x480 scales by exactly 1.5 as planned.
+5. **About one and a half cores are busy before a game starts.** The engine's main loop is one thread, so this does not rule out 30 frames a second, but the service's `CPUQuota=150%` is close to what is left. Phase 3 has to measure it.
+6. Nothing the staged files need is missing: libraries, the loader's place, the CPU's instruction set, Node, the users and groups, the sound route's names, the Store's version.
+
+Still unanswered, because a read-only probe with nothing plugged in cannot answer it: how this unit mounts a stick (options, and whether `nobody` can read it), and what the pad's node looks like to `nobody`.
 
 ## 11. What this changes in the plan
 
@@ -301,17 +341,18 @@ Pending.
 
 ## 12. Open questions
 
-For the probe:
+For the probe (answers of 2026-11-20 in section 10):
 
-1. Does this unit mount a USB stick the way the other car does: where, which filesystem, which options, readable by `nobody`?
-2. Does a hub change anything for the pad or the stick?
-3. RAM, and how much is available with the HMI up.
-4. Mesa version, EGL platforms and libstdc++ version on this firmware.
-5. Group and mode of `/dev/dri/renderD128`.
-6. Which ALSA PCM names the smartx plugin defines.
-7. `core_pattern`, and the systemd defaults for core dumps.
-8. Thermal zones and trip points. Nobody has documented these.
-9. Which renderer is installed and at which version (NV12 and the `video` operation depend on it).
+1. Does this unit mount a USB stick the way the other car does: where, which filesystem, which options, readable by `nobody`? **Open.** It needs a stick in the car and one more run of `20-usb-snapshot`.
+2. Does a hub change anything for the pad or the stick? **Open**, same reason.
+3. ~~RAM, and how much is available with the HMI up.~~ 5.5 GiB, 2.2 GB available.
+4. ~~EGL platforms and libstdc++ version on this firmware.~~ Wayland and GBM; 6.0.24. The Mesa version is **open** (Phase 4).
+5. ~~Group and mode of `/dev/dri/renderD128`.~~ `crw-rw---- root:video`.
+6. ~~Which ALSA PCM names the smartx plugin defines.~~ Any name, as `smartx:<name>`; the CarLife route's shared memory is there.
+7. ~~`core_pattern`, and the systemd defaults for core dumps.~~ The crash handler; "infinity".
+8. ~~Thermal zones and trip points.~~ No zones; the CPU's sensor names 110 C. What the unit does when it gets hot is still unknown.
+9. ~~Which renderer is installed and at which version.~~ `mgu-render` 0.6.23 (I420 only), with `idrive7-renderd` 2.1.18 beside it.
+10. Free space under `/var/opt`: **open**, needs the owner's OK for `df`.
 
 For the owner:
 
