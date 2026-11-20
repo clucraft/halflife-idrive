@@ -10,10 +10,18 @@ distributed here in any form. The service reads the owner's own copy from a USB 
 What is in it, each under its own licence
 -----------------------------------------
 
-service.js, engine.js, gamedata.js, check.js, cleanup.js, sockgroup.js, systemd/
+service.js, engine.js, gamedata.js, gamepad.js, check.js, cleanup.js, sockgroup.js, systemd/
     This project's, GPL-3.0-or-later (LICENSE). sockgroup.js, check.js and the units follow clucraft-plex's
     (clucraft/plex-idrive), which come from amn-iptv's (M850i-amn/idrive7-apps) and aurelmarius/bmw-apps;
     GPL-3.0-or-later.
+
+pad.js, bin/clucraft-hl-pad
+    The USB gamepad reader of nes-idrive, https://github.com/clucraft/nes-idrive (branch mgu-store, the commit
+    named in bin/PAD.json), GPL-2.0-or-later, used here under version 3 of that licence (LICENSE). pad.js is its
+    loader/pad.js, unchanged below its first comment; the packets that switch a pad on and its report's layout are
+    the Linux kernel's (drivers/input/joystick/xpad.c, GPL-2.0-or-later). bin/clucraft-hl-pad is its nes-usbpipe,
+    built from the same source (port/usbpipe in the halflife-idrive repository) under this tool's own file name.
+    It is a Go program; the Go runtime in it is under Go's BSD-3-Clause licence, Copyright (c) The Go Authors.
 
 bin/clucraft-hl, bin/libxash.so, bin/filesystem_stdio.so, bin/libref_soft.so
     Xash3D FWGS, https://github.com/FWGS/xash3d-fwgs, GPL-3.0-or-later (LICENSE), built from the commit named in

@@ -16,6 +16,9 @@
  *   - 20 s without a word from the app, or 5 minutes standing still: the game is saved and ended;
  *   - an engine that gives no sign of life for a minute is ended.
  *
+ * A USB gamepad (gamepad.js) is looked for and read while a game runs, and only then. What it tells goes to
+ * the engine by the same rule as the app's input: never to a game that stands still.
+ *
  * Game data: the owner's own, read from a USB stick (gamedata.js). Nothing of it is ever copied to the head unit.
  * Saves and config: on the stick when it is writable, else in /var/opt/clucraft-halflife/state/base.
  *
@@ -35,6 +38,7 @@ const net = require('net');
 const path = require('path');
 const { createEngine } = require('./engine');
 const GD = require('./gamedata');
+const { createGamepad, PROGRAM } = require('./gamepad');
 
 const VERSION = '0.1.0';
 const IDLE_MS = 60 * 1000;
@@ -70,6 +74,7 @@ function createService(opts) {
         now: Date.now,
         idleMs: IDLE_MS, beatMs: BEAT_MS, goneMs: GONE_MS, heldMs: HELD_MS, hangMs: HANG_MS,
         engine: {},
+        padPipe: null, padFind: null, padScanMs: 0, padEnv: null,   // (the tests' stand-in for a pad)
     }, opts || {});
     const now = o.now;
     const lines = [];
@@ -105,6 +110,14 @@ function createService(opts) {
     const fresh = () => now() - gate.at <= o.beatMs;
     const mayRun = () => fresh() && gate.parked === true && gate.shown === true;
     function beat(m) { gate = { parked: m.parked === true, shown: m.shown === true, at: now() }; }
+
+    /* ---------- a USB gamepad, while a game runs ---------- */
+    const gp = createGamepad({
+        pipe: o.padPipe || [path.join(eng.binDir, PROGRAM)], find: o.padFind || undefined, scanMs: o.padScanMs || undefined, env: o.padEnv || undefined, log,
+        // (force: the "everything let go" before a hold, which the engine must get although the game may not run)
+        send: (ev, force) => (force || mayRun() ? eng.input(ev) : 0),
+        announce: () => eng.pad(true),
+    });
 
     /* ---------- the engine's load on the head unit, for the status page and the log ---------- */
     function sample() {
@@ -150,6 +163,7 @@ function createService(opts) {
         holdSent = null; heldSince = 0; perfAt = now();
         if (!eng.start({ root: d.root, base: base.dir, width: size[0], height: size[1], mode, sound: o.sound, alsa: o.alsa, alsaRate: o.alsaRate, fps: o.fps, dev: o.dev }))
             refused = eng.state().error || 'The engine did not start.';
+        else gp.want(true);
     }
 
     function status() {
@@ -164,6 +178,7 @@ function createService(opts) {
             gate: { parked: gate.parked, shown: gate.shown, age: gate.at ? now() - gate.at : null, fresh: fresh() },
             video: { file: st.videoPath },
             sound: o.sound,
+            pad: gp.state(),
             sys: st.state !== 'stopped' ? sys : null,
             sizes: Object.keys(SIZES),
             last: lines[lines.length - 1] || null,
@@ -205,13 +220,17 @@ function createService(opts) {
     /* ---------- the watch, four times a second ---------- */
     function tick() {
         const st = eng.state(), t = now();
+        if (st.state === 'stopped' || st.state === 'stopping') gp.want(false);
         if (st.state === 'running' || st.state === 'starting') {
             if (st.statAge > o.hangMs) { eng.stop('no sign of life for ' + Math.round(o.hangMs / 1000) + ' s'); return; }
             if (t - gate.at > o.goneMs) { eng.stop('the app went away'); return; }
             const hold = !mayRun();
             if (hold !== holdSent && st.state === 'running') {
                 holdSent = hold; heldSince = hold ? t : 0;
+                // (a stick that was pushed when the game stops must not still be pushed when it goes on)
+                if (hold) gp.neutral();
                 eng.hold(hold);
+                if (!hold) gp.resync();
                 log(hold ? 'game held: ' + (!fresh() ? 'no word from the app' : !gate.parked ? 'the car is not parked' : 'the app is not on the screen') : 'game goes on');
             }
             if (holdSent && t - heldSince > o.heldMs) { eng.stop('stood still for ' + Math.round(o.heldMs / 60000) + ' minutes'); return; }
@@ -236,6 +255,7 @@ function createService(opts) {
             r.lines.forEach((l) => log(l));
             if (!r.ok) log('the engine does not load on this head unit: no game can start');
         });
+        gp.check().then((r) => log('gamepad: its program ' + (r.ok ? 'runs' : 'does not run here (' + r.line + ')')));
         timer = setInterval(() => { try { tick(); } catch (e) { log('watch: ' + e.message); } }, 250);
     }
 
@@ -243,6 +263,7 @@ function createService(opts) {
         if (stopping) return Promise.resolve();
         stopping = true;
         clearInterval(timer);
+        gp.want(false);
         const done = () => { eng.killSync(); if (o.exit !== false) process.exit(code || 0); };
         // (the engine's own ending takes 14 s at the very most: engine.js)
         const t = setTimeout(done, 12000);

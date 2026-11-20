@@ -7,8 +7,8 @@
  *
  *   -mguselftest                    says its libraries load, and leaves (FAKE_SELFTEST_FAIL=1: they do not)
  *   +newgame / +load idrive         starts in the first map / where the save says; else in "its menu"
- *   stdin: mgu_hold 0|1, mgu_key <k> <d> (27: its menu over the game and back; 13 in its menu: a new game),
- *          mgu_axis, mgu_touch, save idrive, quit
+ *   stdin: mgu_hold 0|1, mgu_key <k> <d> (27, or a pad's Menu button 215: its menu over the game and back;
+ *          13 in its menu: a new game), mgu_axis, mgu_touch, mgu_pad, save idrive, quit
  *   FAKE_STAT_MS (200)   FAKE_INPUT_LOG=<file>: every input line it got
  *   FAKE_HANG_KEY=<k>: says nothing more once that key came, and hears nothing
  *   FAKE_CRASH_KEY=<k>: ends like a crash (code 139), leaving its frame file
@@ -88,10 +88,10 @@ function command(line) {
         if (String(k) === process.env.FAKE_HANG_KEY) { hung = true; return; }
         if (String(k) === process.env.FAKE_CRASH_KEY) { console.error('Crash: signal 11 errno 0 with code 1 at 0x0 (nil)'); if (fd >= 0) { try { fs.closeSync(fd); } catch (e) { /* closed */ } } process.exit(139); }
         if (!down) return;
-        if (k === 27 && state === 'game') state = 'paused';
-        else if (k === 27 && state === 'paused') state = 'game';
+        if ((k === 27 || k === 215) && state === 'game') state = 'paused';
+        else if ((k === 27 || k === 215) && state === 'paused') state = 'game';
         else if (k === 13 && state === 'menu') { state = 'game'; map = 'c0a0'; }
-    } else if (f[0] === 'mgu_axis' || f[0] === 'mgu_touch') note(line);
+    } else if (f[0] === 'mgu_axis' || f[0] === 'mgu_touch' || f[0] === 'mgu_pad') note(line);
     else if (f[0] === 'save' && (state === 'game' || state === 'paused')) { mkdirp(path.dirname(saveFile)); fs.writeFileSync(saveFile, 'map=' + map + '\n'); console.log('Saving game to ' + f[1]); }
     else if (f[0] === 'quit') quit(0);
     tick();

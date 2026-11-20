@@ -356,6 +356,102 @@ test('service: an engine that does not load on this head unit starts no game, an
     } finally { server2.close(); await good.close(); }
 });
 
+test('gamepad: buttons are the engine\'s pad keys; sticks and triggers its axes, "up" turned round, with a dead zone', () => {
+    const GP = require(path.join(SVC, 'gamepad')), P = require(path.join(SVC, 'pad'));
+    const pad = (o) => Object.assign({ buttons: 0, lt: 0, rt: 0, lx: 0, ly: 0, rx: 0, ry: 0 }, o);
+    assert.deepStrictEqual(GP.axes(pad({})), [0, 0, 0, 0, 0, 0]);
+    // a real pad rests one to three thousand off centre: that is "in the middle"
+    assert.deepStrictEqual(GP.axes(pad({ lx: 2900, ly: -1800, rx: 3100, ry: 900 })), [0, 0, 0, 0, 0, 0]);
+    // the pad says right and up with the greater number; the engine wants side +, forward -, look up -, turn right +
+    assert.deepStrictEqual(GP.axes(pad({ lx: 32767, ly: 32767, rx: 32767, ry: 32767 })), [32767, -32767, -32767, 32767, 0, 0]);
+    assert.deepStrictEqual(GP.axes(pad({ lx: -32768, ly: -32768, rx: -32768, ry: -32768 })), [-32767, 32767, 32767, -32767, 0, 0]);
+    assert.strictEqual(GP.axes(pad({ lx: 20000 }))[0], 19968, 'sticks are told in steps of 256');
+    assert.deepStrictEqual(GP.axes(pad({ rt: 1023, lt: 512 })).slice(4), [32767, 16384]);
+    assert.deepStrictEqual(GP.axisEvents(GP.axes(pad({})), GP.axes(pad({ lx: 20000, rt: 1023 }))), [['a', 0, 19968], ['a', 4, 32767]]);
+    // buttons: the engine's own key numbers (K_A_BUTTON is 207, K_START_BUTTON 215, K_DPAD_UP 222)
+    const B = P.PAD_FULL;
+    assert.deepStrictEqual(GP.buttonEvents(0, B.A | B.UP), [['k', 207, 1], ['k', 222, 1]]);
+    assert.deepStrictEqual(GP.buttonEvents(B.A | B.UP, B.UP | B.START), [['k', 207, 0], ['k', 215, 1]]);
+    assert.deepStrictEqual(GP.buttonEvents(B.LS, B.LS), []);
+    assert.deepStrictEqual(Object.keys(GP.KEY).sort(), Object.keys(B).sort(), 'a button pad.js tells has no key, or the other way round');
+    // this copy of nes-idrive's pad.js reads an Xbox One S pad's report as that project's does
+    const g = new P.Gip({ vid: 0x045e, pid: 0x02ea });
+    assert.ok(g.start().some((p) => p[0] === 0x05 && p[1] === 0x20), 'no "power on" among the packets that switch the pad on');
+    const d = Buffer.alloc(18);
+    d[0] = 0x20; d[3] = 0x0e; d[4] = 0x10 | 0x04; d[5] = 0x01 | 0x40;
+    d.writeUInt16LE(1023, 8); d.writeInt16LE(-5000, 10); d.writeInt16LE(30000, 12); d.writeInt16LE(123, 14); d.writeInt16LE(-32768, 16);
+    assert.deepStrictEqual(g.packet(d).state, { buttons: B.A | B.START | B.UP | B.LS, lt: 0, rt: 1023, lx: -5000, ly: 30000, rx: 123, ry: -32768 });
+});
+
+test('service: a gamepad is read only while a game runs; what it tells reaches the engine, but never a game that stands still', async () => {
+    const tmp0 = tmpdir('hl-pad-'), inputLog = path.join(tmp0, 'input.log'), padFile = path.join(tmp0, 'pad.jsonl');
+    fs.writeFileSync(padFile, '');
+    const dev = { kind: 'gip', node: '/dev/bus/usb/001/004', iface: 0, epIn: 0x82, epOut: 0x02, packet: 64, vid: 0x045e, pid: 0x02ea, name: 'Controller' };
+    let plugged = true;
+    const s = service({ service: { beatMs: 400, padScanMs: 150, padFind: () => (plugged ? [dev] : []),
+        padPipe: [process.execPath, path.join(ROOT, 'test', 'fake-usbpipe.js')], padEnv: { FAKE_PAD_FILE: padFile, PATH: process.env.PATH || '' },
+        engine: { env: { FAKE_INPUT_LOG: inputLog, FAKE_STAT_MS: '60' } } } });
+    const beating = { parked: true, shown: true };
+    const timer = setInterval(() => s.beat(beating.parked, beating.shown).catch(() => {}), 100);
+    const pad = (st) => fs.appendFileSync(padFile, JSON.stringify(st) + '\n');
+    const got = () => { try { return fs.readFileSync(inputLog, 'utf8').trim().split('\n').filter(Boolean); } catch (e) { return []; } };
+    const count = (line) => got().filter((l) => l === line).length;
+    const seen = async (line, n) => { try { await until(() => count(line) >= (n || 1), 3000, ''); } catch (e) { throw new Error('the engine did not get "' + line + '"' + (n ? ' ' + n + ' times' : '') + '; it got: ' + got().join(' | ')); } };
+    const status = () => s.ask({ cmd: 'status' });
+    // (the stand-in pad counts what is appended once it is switched on, and says when that is)
+    const switchedOn = () => until(() => fs.existsSync(padFile + '.on'), 3000, 'the pad being switched on');
+    try {
+        let st = await until(() => status().then((x) => x.selftest && x.pad.program && x), 6000, 'the checks');
+        // plugged in, no game: it is seen, and left alone
+        assert.deepStrictEqual([st.pad.program.ok, st.pad.found, st.pad.name, st.pad.reading], [true, 1, 'Controller', false]);
+        await s.beat(true, true);
+        assert.strictEqual((await s.ask({ cmd: 'start', mode: 'new' })).refused, null);
+        await until(s.state('game'), 6000, 'the game');
+        await until(() => status().then((x) => x.pad.reading), 3000, 'the pad being read');
+        await switchedOn();
+        await seen('mgu_pad 1');
+        // a button, the moment it changes
+        pad({ buttons: ['A'] }); await seen('mgu_key 207 1');
+        pad({ buttons: [] }); await seen('mgu_key 207 0');
+        // the left stick up and to the right; the right trigger
+        pad({ lx: 20000, ly: 32767, rt: 1023 });
+        await seen('mgu_axis 0 19968'); await seen('mgu_axis 1 -32767'); await seen('mgu_axis 4 32767');
+        // the Menu button: the game's menu over the game
+        pad({ buttons: ['START'], lx: 20000, ly: 32767, rt: 1023 }); await seen('mgu_key 215 1');
+        await until(s.state('paused'), 3000, 'the game\'s menu');
+        pad({ lx: 20000, ly: 32767, rt: 1023 }); await seen('mgu_key 215 0');
+
+        // the car moves with the stick still pushed: the engine is told everything is let go, then nothing more
+        beating.parked = false;
+        await until(() => status().then((x) => x.engine.held), 3000, 'the hold');
+        await seen('mgu_axis 0 0'); await seen('mgu_axis 1 0'); await seen('mgu_axis 4 0');
+        pad({ buttons: ['B'], lx: 20000, ly: 32767, rt: 1023 });
+        await sleep(400);
+        assert.strictEqual(count('mgu_key 208 1'), 0, 'a button reached a game that stands still');
+        // parked again: what is held on the pad now is told again
+        beating.parked = true;
+        await until(() => status().then((x) => !x.engine.held), 3000, 'the game going on');
+        await seen('mgu_key 208 1'); await seen('mgu_axis 0 19968', 2); await seen('mgu_axis 1 -32767', 2);
+
+        // pulled out: everything let go, no error; plugged in again: read again
+        plugged = false;
+        pad({ unplug: true });
+        st = await until(() => status().then((x) => !x.pad.reading && x), 3000, 'the pad going');
+        assert.deepStrictEqual([st.pad.error, st.pad.found], [null, 0]);
+        await seen('mgu_key 208 0'); await seen('mgu_axis 0 0', 2);
+        assert.strictEqual(st.engine.state, 'running', 'the game ended with the pad');
+        fs.unlinkSync(padFile + '.on');
+        plugged = true;
+        await until(() => status().then((x) => x.pad.reading), 3000, 'the pad being read again');
+        await switchedOn();
+        pad({ buttons: ['X'] }); await seen('mgu_key 209 1');
+        // the game ends: the pad is let go
+        await s.ask({ cmd: 'stop' });
+        st = await until(() => status().then((x) => !x.pad.reading && x), 3000, 'the pad let go');
+        assert.deepStrictEqual([st.engine.state, st.pad.found], ['stopped', 1]);
+    } finally { clearInterval(timer); await s.close(); }
+});
+
 test('service: no stick, or a stick without the game: no game, and the reason is the stick\'s', async () => {
     for (const kind of ['none', 'empty']) {
         const s = service({ stick: kind });
@@ -379,8 +475,10 @@ test('app: from the launcher into a game and back, by taps; BACK leaves the game
         let f = st.frame();
         const keys = () => st.frame().targets.map((t) => t.key);
         assert.deepStrictEqual(keys().filter((k) => !/^page_/.test(k)), ['new', 'menu'], 'the launcher\'s buttons with nothing saved');
-        assert.deepStrictEqual(st.ui.checks().map((r) => r[1]), ['Service', 'Engine', 'Game data', 'Saves', 'Car']);
-        assert.ok(st.ui.checks().every((r) => r[0] === st.ui.C.green), JSON.stringify(st.ui.checks()));
+        assert.deepStrictEqual(st.ui.checks().map((r) => r[1]), ['Service', 'Engine', 'Game data', 'Saves', 'Gamepad', 'Car']);
+        // everything a game needs is there; no pad is plugged in, which is said and stops nothing
+        assert.ok(st.ui.checks().filter((r) => r[1] !== 'Gamepad').every((r) => r[0] === st.ui.C.green), JSON.stringify(st.ui.checks()));
+        assert.deepStrictEqual(st.ui.checks().filter((r) => r[1] === 'Gamepad')[0].slice(0, 1), [st.ui.C.amber]);
         // not parked: nothing starts, and the page says why
         st.car.parked = false;
         await st.beat();
@@ -462,7 +560,7 @@ test('app: every page draws, with the service missing, not open yet, without a s
         try {
             await st.until(() => st.S.st && st.S.st.selftest, 6000, 'the status');
             await draw(st, ['home', 'status']);
-            assert.ok(st.ui.checks().some((r) => r[0] !== st.ui.C.green), 'nothing on the launcher says what is wrong');
+            assert.ok(st.ui.checks().filter((r) => r[1] !== 'Gamepad').some((r) => r[0] !== st.ui.C.green), 'nothing on the launcher says what is wrong');
             st.frame(); await st.tap('new');
             assert.ok(st.S.toastText() && st.S.view === 'pages', 'a game started');
         } finally { await st.close(); }
@@ -715,8 +813,20 @@ test('repository: versions and manifests agree; the engine\'s files are the ones
     // executable programs with the crash handler by name), and its name is the one the manifest gives the handler
     const { FILES } = require(path.join(SVC, 'engine'));
     FILES.forEach((f) => assert.ok(comp.files.some((x) => x.path === 'bin/' + f), 'bin/' + f + ' is not in component.json'));
-    assert.deepStrictEqual(comp.files.filter((x) => x.mode === '0755').map((x) => x.path), ['bin/clucraft-hl']);
-    assert.deepStrictEqual(comp.crashNames, ['clucraft-hl']);
+    const { PROGRAM } = require(path.join(SVC, 'gamepad'));
+    assert.deepStrictEqual(comp.files.filter((x) => x.mode === '0755').map((x) => x.path), ['bin/clucraft-hl', 'bin/' + PROGRAM]);
+    assert.deepStrictEqual(comp.crashNames, ['clucraft-hl', PROGRAM]);
+    // the gamepad's program: built from the source in port/usbpipe, which is nes-idrive's, and (with the same Go)
+    // byte for byte that project's own
+    const padJson = path.join(SVC, 'bin', 'PAD.json');
+    if (fs.existsSync(padJson)) {
+        const P = JSON.parse(fs.readFileSync(padJson, 'utf8'));
+        assert.strictEqual(P.file.name, PROGRAM);
+        assert.strictEqual(crypto.createHash('sha256').update(fs.readFileSync(path.join(SVC, 'bin', PROGRAM))).digest('hex'), P.file.sha256, 'bin/' + PROGRAM + ' is not the file PAD.json describes');
+        assert.strictEqual(crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'port', 'usbpipe', 'main.go'), 'utf8').replace(/\r\n/g, '\n')).digest('hex'), P.source.sha256, 'port/usbpipe/main.go changed since the program was built: node tools/build/build-pad.js');
+        assert.strictEqual(P.sameAsOrigin, true, 'the program is not the same bytes as nes-idrive\'s (it was built with ' + P.built.go + ')');
+    }
+    assert.ok(/^SupplementaryGroups=mgu_alsa mgu_usb$/m.test(fs.readFileSync(path.join(SVC, 'systemd', 'clucraft-halflife.service'), 'utf8')), 'the service lacks the group of the pad\'s USB node');
     assert.ok(comp.files.some((x) => x.path === 'bin/LICENSE.hlsdk'), 'the game libraries ship without their licence');
     // the units: never root, never at boot, with limits and no core dump
     const unit = fs.readFileSync(path.join(SVC, 'systemd', 'clucraft-halflife.service'), 'utf8');
@@ -752,6 +862,15 @@ test('repository: versions and manifests agree; the engine\'s files are the ones
         assert.strictEqual(B.engine.backend, h.digest('hex'), 'port/engine/ changed since bin/ was built: build and stage again');
     }
     assert.strictEqual(app.settings.filter((x) => x.key === 'touch')[0].default, false);
+    // Found on the owner's car with nes-idrive: only what goes through the GPU renderer shows there (pictures pushed
+    // to the HMI directly are refused), and the kit's renderer path serves an app's first canvas screen only. So:
+    // one screen, a canvas, with everything drawn on it, and a renderer required. (The game itself is not a
+    // screen of the kit's: it is a second connection to the renderer, as plex-idrive's player is.)
+    assert.deepStrictEqual(app.screens.map((x) => x.name + ':' + x.kind), ['MAIN:canvas'], 'the app must have one canvas screen and no other');
+    assert.deepStrictEqual(app.needs, ['renderer']);
+    const mainJs = fs.readFileSync(path.join(APP, 'main.js'), 'utf8');
+    assert.deepStrictEqual((mainJs.match(/ctx\.loop\('([A-Z_]+)'/g) || []), ["ctx.loop('MAIN'"], 'main.js draws on another screen than MAIN');
+    assert.deepStrictEqual((mainJs.match(/ui\.image\('([A-Z_]+)'/g) || []), ["ui.image('MAIN_GFX'"], 'main.js pushes a picture to another screen than MAIN');
     // what must never be committed
     const ignored = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
     ['valve/', '*.bsp', '*.wad', '*.sav', '/oap-sdk/', 'dist/', 'id_*'].forEach((p) => assert.ok(ignored.split('\n').indexOf(p) >= 0, '.gitignore does not name ' + p));

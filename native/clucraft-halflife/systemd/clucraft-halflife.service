@@ -15,9 +15,10 @@ StartLimitBurst=10
 # nobody, and a root process that opens the car's sound device leaves a lock behind that silences other apps
 # until the head unit restarts (the engine refuses to run as root for that reason).
 #   mgu_alsa   the sound device (SmartXbar's CarLife input)
-# Not asked for until they are needed: video (the GPU's render node) and mgu_usb (a gamepad on usbfs).
+#   mgu_usb    a gamepad's node under /dev/bus/usb (root:mgu_usb, 0660), read through usbfs by bin/clucraft-hl-pad
+# Not asked for until it is needed: video (the GPU's render node).
 User=nobody
-SupplementaryGroups=mgu_alsa
+SupplementaryGroups=mgu_alsa mgu_usb
 # Root for the commands around the service only (they keep the limits below, LimitCORE included; no "+"
 # commands): the state folder is made nobody's, the control socket gets the app's group, the frame file goes.
 PermissionsStartOnly=true

@@ -26,6 +26,11 @@ const BIN = '/opt/hl/tool';
 const ENV = { ALSA_CONFIG_PATH: process.env.E2E_ALSA_CONFIG || '', PULSE_SERVER: process.env.PULSE_SERVER || '', XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || '' };
 const ONLY = (process.env.HL_E2E || '').split(',').filter(Boolean);
 const K_ESCAPE = 27;
+// a stand-in for a gamepad (test/fake-usbpipe.js): every line appended to PAD_FILE is one state of the pad
+const PAD_FILE = OUT + '/pad.jsonl';
+const PAD_DEV = { kind: 'gip', node: '/dev/bus/usb/001/004', iface: 0, epIn: 0x82, epOut: 0x02, packet: 64, vid: 0x045e, pid: 0x02ea, name: 'Controller' };
+const pad = (state) => fs.appendFileSync(PAD_FILE, JSON.stringify(state || {}) + '\n');
+const press = async (button, ms) => { pad({ buttons: [button] }); await sleep(ms || 150); pad({}); await sleep(150); };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
@@ -72,6 +77,9 @@ async function engineAlone() {
     const eng = createEngine({ bin: BIN, videoPath: VIDEO, env: ENV, log: (s) => console.log(s) });
     const st = await eng.selftest();
     check('the engine\'s libraries load (self-test)', st.ok, st.lines[st.lines.length - 1]);
+    // the gamepad's program as it is committed: it runs here (no pad: it says how it is used and leaves with 2)
+    const prog = require('child_process').spawnSync(path.join(ROOT, 'native', 'clucraft-halflife', 'bin', 'clucraft-hl-pad'), [], { encoding: 'utf8' });
+    check('the gamepad\'s program runs', prog.status === 2 && /usage/.test(prog.stderr || ''), 'exit ' + prog.status + ': ' + String(prog.stderr || prog.error || '').trim().slice(0, 90));
     fs.mkdirSync(OUT + '/alone');
     eng.start({ root: '/hl', base: OUT + '/alone', width: 1280, height: 480, mode: 'new', alsa: 'car', dev: true });
     const inGame = await until(() => { const s = eng.state().stat; return s && s.state === 'game' && s.map === 'c0a0'; }, 40000, 'the first map');
@@ -115,7 +123,10 @@ async function withService() {
         stateDir: OUT + '/state', dataRoot: '/hl', exit: false, alsa: 'car', dev: true,
         idleMs: 3600 * 1000, goneMs: 6000, heldMs: 9000, hangMs: 10000,
         engine: { bin: BIN, videoPath: VIDEO, env: ENV },
+        padFind: () => [PAD_DEV], padPipe: [process.execPath, path.join(ROOT, 'test', 'fake-usbpipe.js')], padEnv: { FAKE_PAD_FILE: PAD_FILE, PATH: process.env.PATH || '' },
     });
+    fs.writeFileSync(PAD_FILE, '');
+    const padOn = async () => { await until(() => fs.existsSync(PAD_FILE + '.on'), 5000, 'the stand-in pad being switched on'); fs.unlinkSync(PAD_FILE + '.on'); };
     const server = net.createServer();
     svc.serve(server);
     await new Promise((r) => server.listen(SOCK, r));
@@ -167,6 +178,21 @@ async function withService() {
     check('and again (Escape: back to the game)', !!(await until(engineIs('game'), 4000, 'the game')));
     r = await ask({ cmd: 'input', ev: [['k', 'quit', 1], ['x'], ['t', 0, '0.5; quit', 0.5], ['a', 9, 0], 'quit', ['k', 300, 1]] });
     check('input that is not numbers in range is dropped', r.n === 0 && (await status()).engine.state === 'running');
+
+    // a gamepad (a stand-in for the pad itself; the engine and what it does with the pad are real)
+    check('a gamepad is read while the game runs', !!(await until(() => status().then((x) => x.pad && x.pad.reading), 5000, 'the pad being read')), JSON.stringify(st.pad));
+    await padOn();
+    await sleep(500);
+    check('the engine lays out the pad\'s buttons (its Xbox preset)', (await ask({ cmd: 'log' })).engine.some((l) => /Applying "xbox" gamepad preset/.test(l)));
+    note('picture: ' + shot('6-pad-before'));
+    pad({ rx: 32767 }); await sleep(900); pad({}); await sleep(400);
+    note('picture, the right stick pushed right for 0.9 s: ' + shot('7-pad-turned-right'));
+    pad({ ly: 32767 }); await sleep(1500); pad({}); await sleep(400);
+    note('picture, the left stick pushed up for 1.5 s: ' + shot('8-pad-walked-forward'));
+    await press('START');
+    check('the pad\'s Menu button opens the game\'s menu', !!(await until(engineIs('paused'), 4000, 'the menu')));
+    await press('B');
+    check('and its B button goes back to the game', !!(await until(engineIs('game'), 4000, 'the game')));
 
     // the app is not on the screen (HOME was pressed): the game stands still too
     car.shown = false;
@@ -229,6 +255,40 @@ async function withService() {
     server.close();
 }
 
+/* ---------- the game's own menu with the pad alone, as on the car: no keyboard, no developer mode ---------- */
+async function padInMenu() {
+    const svc = createService({
+        stateDir: OUT + '/state-menu', dataRoot: '/hl', exit: false, alsa: 'car', dev: false, idleMs: 3600 * 1000,
+        engine: { bin: BIN, videoPath: VIDEO, env: ENV },
+        padFind: () => [PAD_DEV], padPipe: [process.execPath, path.join(ROOT, 'test', 'fake-usbpipe.js')], padEnv: { FAKE_PAD_FILE: PAD_FILE, PATH: process.env.PATH || '' },
+    });
+    fs.writeFileSync(PAD_FILE, '');
+    try { fs.unlinkSync(PAD_FILE + '.on'); } catch (e) { /* none */ }
+    const beat = setInterval(() => svc.command({ cmd: 'beat', parked: true, shown: true }).catch(() => {}), 400);
+    const stat = () => svc.command({ cmd: 'status' }).then((s) => s.engine.stat || {});
+    svc.start();
+    try {
+        await until(() => svc.command({ cmd: 'status' }).then((s) => s.selftest), 20000, 'the self-test');
+        await svc.command({ cmd: 'beat', parked: true, shown: true });
+        await svc.command({ cmd: 'start', mode: 'menu', size: '960x360' });
+        await until(() => stat().then((s) => s.state === 'menu'), 30000, 'the menu');
+        await until(() => fs.existsSync(PAD_FILE + '.on'), 5000, 'the stand-in pad being switched on');
+        await sleep(1500);
+        // D-pad down puts the mark on the first entry ("New game"); A opens it; down and A take "Easy"
+        const steps = ['DOWN', 'A', 'DOWN', 'A'];
+        for (let i = 0; i < steps.length && (await stat()).state === 'menu'; i++) {
+            await press(steps[i]);
+            await sleep(1200);
+            note('menu, after ' + steps.slice(0, i + 1).join(' ') + ': ' + (await stat()).state + ', ' + shot('9-menu-pad-' + (i + 1)));
+        }
+        const s = await until(() => stat().then((x) => x.state === 'game' && x.map === 'c0a0' && x), 40000, 'the first map');
+        check('a new game can be started from the game\'s own menu with the pad alone', !!s, JSON.stringify(await stat()));
+    } finally {
+        clearInterval(beat);
+        await svc.stop(0);
+    }
+}
+
 function written() {
     const list = [];
     (function walk(d, rel) {
@@ -246,6 +306,7 @@ function written() {
     try { fs.unlinkSync(OUT + '/result.txt'); } catch (e) { /* none */ }
     if (want('engine')) await engineAlone();
     if (want('service')) { await withService(); written(); }
+    if (want('padmenu')) await padInMenu();
     note(failed ? failed + ' check(s) FAILED' : 'all ' + results.length + ' checks passed');
     process.exit(failed ? 1 : 0);
 })().catch((e) => { check('the test itself', false, String(e && e.stack || e)); process.exit(2); });

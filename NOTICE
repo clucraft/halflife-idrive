@@ -17,6 +17,8 @@ This repository has parts under different licences:
                                                                                     lists what is in bin/)
   port/                                                                             GPL-3.0-or-later (port/LICENSE): this
                                                                                     project's changes to the engine
+  port/usbpipe/, native/clucraft-halflife/pad.js                                    GPL-2.0-or-later (port/usbpipe/LICENSE):
+                                                                                    nes-idrive's gamepad reader
   kit/                                                                              MIT (kit/LICENSE.idrive7-apps, kit/LICENSE.nickgcode)
 
 The app (MIT) and the service with the engine (GPL) are separate programs that talk over a socket.
@@ -40,6 +42,13 @@ clucraft/plex-idrive  https://github.com/clucraft/plex-idrive
       tools of the same names. MIT.
     - native/clucraft-halflife/sockgroup.js, check.js, cleanup.js and systemd/ follow its service's.
       GPL-3.0-or-later.
+
+clucraft/nes-idrive  https://github.com/clucraft/nes-idrive  (branch mgu-store, commit f80c7be750b5973b2c2a4a15ffc264d132d93b31)
+    The USB gamepad reader, proven there with an Xbox One S pad on the owner's car. GPL-2.0-or-later.
+    - native/clucraft-halflife/pad.js: its loader/pad.js, unchanged below its first comment.
+    - port/usbpipe/main.go: its loader/src/nes-usbpipe/main.go, unchanged. native/clucraft-halflife/bin/clucraft-hl-pad
+      is built from it and is byte for byte that project's loader/nes-usbpipe (bin/PAD.json), under another file name.
+    - test/fake-usbpipe.js speaks that program's lines of hex, for the tests.
 
 M850i-amn/idrive7-apps  https://github.com/M850i-amn/idrive7-apps  (commit 0dfa583151e0c59ba8d2a8d9272a1d8685b66d2a)
     Copyright (c) 2026 M850i-amn.

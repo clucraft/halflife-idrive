@@ -11,6 +11,7 @@
  *   eng.selftest()            -> Promise { ok, lines }: do the engine's libraries load on this head unit?
  *   eng.start({ root, base, width, height, mode, sound, alsa, alsaRate, fps, dev })
  *   eng.hold(on)              stop the game where it stands, or let it go on
+ *   eng.pad(on)               a gamepad is being read (gamepad.js)
  *   eng.input(events)         [['k', key, down], ['a', axis, value], ['t', phase, x, y]]
  *   eng.stop(why)             -> Promise: save, quit; then SIGTERM, then SIGKILL as a last resort
  *   eng.state()               { state, held, pid, since, stat, statAge, exits, last, error }
@@ -149,6 +150,8 @@ function createEngine(o) {
     const write = (l) => { if (cur && !cur.done) { try { cur.child.stdin.write(l + '\n'); return true; } catch (e) { /* gone */ } } return false; };
 
     function hold(on) { return write('mgu_hold ' + (on ? 1 : 0)); }
+    /** a gamepad is being read: the engine lays out its buttons (its Xbox preset), once */
+    function pad(on) { return write('mgu_pad ' + (on ? 1 : 0)); }
 
     /** what the app and the pad reader saw, as the engine's own commands. Numbers only: nothing here is typed text */
     function input(events) {
@@ -200,7 +203,7 @@ function createEngine(o) {
     }
     const hasSave = (base) => { try { return fs.statSync(path.join(base, 'valve', 'save', SAVE_NAME + '.sav')).isFile(); } catch (e) { return false; } };
 
-    return { selftest, start, hold, input, stop, killSync, state, log: (n) => ring.slice(-(n || 40)), hasSave, missing, clearError() { st.error = null; } };
+    return { selftest, start, hold, pad, input, stop, killSync, state, log: (n) => ring.slice(-(n || 40)), hasSave, missing, binDir, clearError() { st.error = null; } };
 }
 
 module.exports = { createEngine, VIDEO_PATH, ALSA_DEVICE, ALSA_RATE, SAVE_NAME, FILES };

@@ -1,0 +1,24 @@
+{
+  "origin": {
+    "repository": "https://github.com/clucraft/nes-idrive",
+    "branch": "mgu-store",
+    "commit": "f80c7be750b5973b2c2a4a15ffc264d132d93b31",
+    "source": "loader/src/nes-usbpipe/main.go",
+    "program": "loader/nes-usbpipe",
+    "programSha256": "abb9d033d4e2b65507ed3f1684ece3c90c419c6f99b3a3af01f31401ece995fe"
+  },
+  "source": {
+    "path": "port/usbpipe/main.go",
+    "sha256": "14142ad6ac5ee28b02b31fadbeed3c062e7ecdc389fdbf2ec885fe840fdffc97"
+  },
+  "built": {
+    "go": "go1.26.5",
+    "flags": "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags -s -w -buildid="
+  },
+  "file": {
+    "name": "clucraft-hl-pad",
+    "size": 1634430,
+    "sha256": "abb9d033d4e2b65507ed3f1684ece3c90c419c6f99b3a3af01f31401ece995fe"
+  },
+  "sameAsOrigin": true
+}

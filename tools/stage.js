@@ -36,6 +36,7 @@ const W = 1600, H = 520, VID = 7;
 // the full-screen layout on the 1920 x 720 display, as kit/runtime/display.js places a page with no bar under it
 const PLACE = { x: 0, y: 0, w: 1920, h: 720, full: true, scale: 1.165, ox: 70, oy: 51, extra: 49 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const PAD = { kind: 'gip', node: '/dev/bus/usb/001/004', iface: 0, epIn: 0x82, epOut: 0x02, packet: 64, vid: 0x045e, pid: 0x02ea, name: 'Controller' };
 
 let fontsDone = false;
 function registerFonts() {
@@ -76,6 +77,9 @@ function serviceOptions(tmp, stick, more) {
     }, m.engine || {});
     return Object.assign({
         stateDir: path.join(tmp, 'state'), mounts: stick.mounts, roots: [stick.media], exit: false, thermal: path.join(tmp, 'no-thermal'),
+        // the gamepad: the stand-in for its program (test/fake-usbpipe.js), and no pad plugged in unless a test says so
+        // (never this computer's own USB devices)
+        padPipe: [process.execPath, path.join(ROOT, 'test', 'fake-usbpipe.js')], padFind: () => [],
     }, m, { engine });
 }
 
@@ -84,7 +88,9 @@ async function createStage(opts) {
     registerFonts();
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hl-stage-'));
     const stick = makeStick(tmp, o.stick);
-    const svc = createService(serviceOptions(tmp, stick, Object.assign({}, o.service || {}, { engine: Object.assign({ env: o.engineEnv || {} }, (o.service && o.service.engine) || {}) })));
+    // o.pad: a gamepad is plugged in (an Xbox One S pad, as the head unit lists it)
+    const plugged = o.pad ? { padFind: () => [PAD] } : {};
+    const svc = createService(serviceOptions(tmp, stick, Object.assign(plugged, o.service || {}, { engine: Object.assign({ env: o.engineEnv || {} }, (o.service && o.service.engine) || {}) })));
     svc.start();
 
     const values = Object.assign({ size: '1280x480', touch: false, stats: false }, o.settings || {});

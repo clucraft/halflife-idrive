@@ -40,7 +40,8 @@ with open('/run-hl/sound.wav', 'wb') as f:
     f.write(b'RIFF' + struct.pack('<I', 36 + len(raw)) + b'WAVEfmt ' + struct.pack('<IHHIIHH', 16, 1, 2, 48000, 48000 * 4, 4, 16) + b'data' + struct.pack('<I', len(raw)) + raw)
 os.remove(p)
 print('sound recorded: %.1f s at 48 kHz, RMS %.0f of 32768, %.0f%% of it above silence' % (secs, rms, nonzero * 100))
-print('SOUND ' + ('ok' if secs > 20 and rms > 100 else 'FAILED'))
+# (judged only on a run long enough to hold a stretch of the game: the whole test, or its engine half)
+print('SOUND ' + ('ok' if secs > 20 and rms > 100 else 'FAILED' if secs > 20 else 'not judged: a short run'))
 EOF
 
 echo "--- e2e exit code $code"
