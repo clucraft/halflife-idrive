@@ -1,0 +1,14 @@
+{
+  "name": "halflife-idrive",
+  "version": "0.1.0",
+  "description": "Half-Life on the BMW iDrive 7 (MGU) head unit: a native port on Xash3D FWGS, installed through the MGU Store. Bring your own game data.",
+  "private": true,
+  "license": "SEE LICENSE IN NOTICE",
+  "scripts": {
+    "test": "node test/run.js",
+    "test:node8": "node tools/node8.js test/run.js",
+    "emu": "node tools/emu.js",
+    "shots": "node tools/shots.js",
+    "icon": "node tools/make-icon.js"
+  }
+}

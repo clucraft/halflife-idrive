@@ -1,0 +1,10 @@
+Half-Life (clucraft_halflife): the launcher and the screen of an unofficial port of Half-Life to the BMW iDrive 7
+head unit. MIT (LICENSE). Not affiliated with or endorsed by Valve Corporation or BMW AG. No game data is in it.
+
+In this app, each under its own licence:
+  drivegate.js                       from clucraft/plex-idrive. MIT, Copyright (c) 2026 Drive-In contributors.
+  svc.js, caraudio.js, fullview.js   from M850i-amn/idrive7-apps, apps/amn_iptv/lib, by way of plex-idrive.
+                                     MIT, Copyright (c) 2026 M850i-amn.
+  fonts (cl_bold, cl_med)            Inter, SIL Open Font License 1.1 (LICENSE-Inter.txt in the fonts pack).
+  kit/                               the MGU App Kit: MIT, cauliflowermossgrape, 小白151, Nick G.
+The licences' texts are in LICENSE.

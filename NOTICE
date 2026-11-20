@@ -1,0 +1,63 @@
+halflife-idrive
+===============
+
+Half-Life (1998) on the BMW iDrive 7 (MGU) head unit: a native port on the Xash3D FWGS engine, installed through
+the MGU Store. An unofficial project: not affiliated with or endorsed by Valve Corporation or BMW AG. Half-Life is
+a trademark of Valve Corporation; BMW and iDrive are trademarks of BMW AG.
+
+NO GAME DATA IS IN THIS REPOSITORY, and none is in anything built from it. Half-Life's maps, models, sounds and
+textures belong to Valve. You need your own copy of the game; the head unit reads it from your USB stick.
+BMW's app SDK is not in this repository either and may not be published; the MGU Store's build on the head unit
+uses the unit's own.
+
+This repository has parts under different licences:
+
+  apps/clucraft_halflife/, tools/, test/, docs/, docker/, the files at the root     MIT (LICENSE)
+  native/clucraft-halflife/                                                         GPL-3.0-or-later (its LICENSE; its NOTICE
+                                                                                    lists what is in bin/)
+  port/                                                                             GPL-3.0-or-later (port/LICENSE): this
+                                                                                    project's changes to the engine
+  kit/                                                                              MIT (kit/LICENSE.idrive7-apps, kit/LICENSE.nickgcode)
+
+The app (MIT) and the service with the engine (GPL) are separate programs that talk over a socket.
+
+What it is built on
+-------------------
+
+Xash3D FWGS  https://github.com/FWGS/xash3d-fwgs  (the commit in port/pins.env)
+    The engine. GPL-3.0-or-later. port/engine.patch and port/engine/ are this project's head-unit backend for it;
+    native/clucraft-halflife/bin holds the build (docs/BUILD.md says how to make it again).
+
+hlsdk-portable  https://github.com/FWGS/hlsdk-portable  (the commit in port/pins.env)
+    The game's server and client libraries, built unchanged. Half Life 1 SDK LICENSE, Copyright (c) Valve Corp.:
+    free of charge only (native/clucraft-halflife/bin/LICENSE.hlsdk).
+
+clucraft/plex-idrive  https://github.com/clucraft/plex-idrive
+    The model for the app, the service and the tools. From it, with this project's names:
+    - apps/clucraft_halflife/drivegate.js (without its passenger setting); main.js, store.js and ui.js follow its
+      structure. MIT, Copyright (c) 2026 Drive-In contributors.
+    - tools/emu.js, tools/node8.js, tools/make-icon.js, tools/stage.js, tools/shots.js and test/run.js follow its
+      tools of the same names. MIT.
+    - native/clucraft-halflife/sockgroup.js, check.js, cleanup.js and systemd/ follow its service's.
+      GPL-3.0-or-later.
+
+M850i-amn/idrive7-apps  https://github.com/M850i-amn/idrive7-apps  (commit 0dfa583151e0c59ba8d2a8d9272a1d8685b66d2a)
+    Copyright (c) 2026 M850i-amn.
+    - kit/: its copy of the MGU App Kit (below), unchanged, as plex-idrive carries it. kit/UPSTREAM.json names
+      the commit.
+    - apps/clucraft_halflife/svc.js, caraudio.js, fullview.js: from apps/amn_iptv/lib, by way of plex-idrive. MIT.
+    - the service's socket handling comes from its amn-iptv service, from aurelmarius/bmw-apps. GPL-3.0-or-later.
+
+The MGU App Kit (kit/)
+    cauliflowermossgrape/idrive7-apps, Copyright (c) 2026 cauliflowermossgrape, Copyright (c) 2026 小白151
+    (GitHub: JackieZ123430), Chinese translation: MIT (kit/LICENSE.idrive7-apps).
+    nickgcode/idrive7-apps, Copyright (c) 2026 Nick G: MIT (kit/LICENSE.nickgcode).
+    The fonts in kit/runtime/fonts are under the SIL Open Font License 1.1 (the OFL file beside them).
+
+JustAnotherPU/moonride, Robert Nisipeanu (mgu-store, mgu-render)
+    The route of the sound to the car's speakers (source 287) and the frame file's format. The MGU Store and its
+    renderer are used as installed; none of their code is in this repository.
+
+Inter  https://github.com/rsms/inter
+    apps/clucraft_halflife/data/fonts (baked glyph atlases, as plex-idrive ships them). SIL Open Font License 1.1,
+    Copyright (c) 2016 The Inter Project Authors (LICENSE-Inter.txt beside them).

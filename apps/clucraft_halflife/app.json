@@ -1,0 +1,104 @@
+{
+  "id": "clucraft_halflife",
+  "title": "Half-Life",
+  "description": "Half-Life (1998) running on the head unit itself, on the centre screen, while the car is parked: the Xash3D FWGS engine with your own game data. An unofficial port, not affiliated with Valve or BMW. No game data is included: copy the valve folder of your own copy of Half-Life to a USB stick and plug it in. The picture shows only while the car is parked (selector in P, standing); the game stands still the moment it is not. Sound plays on the car's speakers. The iDrive controller works the game's menus; playing needs a USB gamepad. Needs the Half-Life service and a GPU renderer from the Store.",
+  "version": "0.1.0",
+  "vendor": "custom",
+  "loggingId": "HLIF",
+  "mguHmi": [
+    "ID7"
+  ],
+  "requires": {
+    "clucraft-halflife": "0.1.0"
+  },
+  "needs": [
+    "renderer"
+  ],
+  "signals": {
+    "de.bmw.infotainment.vehicle.Vehicle2": {
+      "statusCarSpeed2": "rs",
+      "_optional": "the speed: the game only while parked"
+    },
+    "de.bmw.infrastructure.VehicleInformation": {
+      "statusGearboxDrive": "s",
+      "DataPowerTrain2": "s",
+      "_optional": "the selector position: the game only in P"
+    },
+    "org.genivi.am.commandinterface.CommandControl": {
+      "_instances": "1",
+      "_methods": [
+        "connect",
+        "disconnect",
+        "getListMainConnections"
+      ],
+      "_optional": "the sound on the car's speakers"
+    },
+    "org.genivi.am.routinginterface.RoutingControlObserver": {
+      "_instances": "1",
+      "_methods": [
+        "hookSourceAvailablityStatusChange"
+      ],
+      "_optional": "the sound on the car's speakers"
+    }
+  },
+  "screens": [
+    {
+      "name": "MAIN",
+      "kind": "canvas",
+      "title": "Half-Life",
+      "fullscreen": true,
+      "buttons": [
+        [
+          "BTN_PLAY",
+          "Play"
+        ],
+        [
+          "BTN_STOP",
+          "Save and end"
+        ],
+        [
+          "BTN_STATUS",
+          "Status"
+        ],
+        [
+          "BTN_SETTINGS",
+          "Settings"
+        ]
+      ]
+    }
+  ],
+  "settings": [
+    {
+      "key": "size",
+      "label": "Picture size (smaller is faster; the screen is 1920 x 720)",
+      "type": "choice",
+      "default": "1280x480",
+      "options": [
+        [
+          "1280x480",
+          "1280 x 480"
+        ],
+        [
+          "960x360",
+          "960 x 360"
+        ],
+        [
+          "640x240",
+          "640 x 240"
+        ]
+      ]
+    },
+    {
+      "key": "touch",
+      "label": "Touch in the game's menus (off: a touch on the game leaves it)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "stats",
+      "label": "Show frames a second, CPU and temperature over the game",
+      "type": "bool",
+      "default": false
+    }
+  ]
+}
