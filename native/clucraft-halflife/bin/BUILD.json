@@ -1,0 +1,55 @@
+{
+  "built": {
+    "flags": "-O2 -march=silvermont -mtune=silvermont",
+    "gcc": "7.5.0",
+    "image": "ubuntu:18.04"
+  },
+  "engine": {
+    "backend": "cbd4d03c5e54b78714e4130c07c60d4930ae06003d4cf6b8c215586657d319b4",
+    "commit": "11ed246c885d710ca1682370c66ee6594ac2d25a",
+    "patch": "ed3d4d49d5922a12dc2073319728c8c8db55b8f18277c181bf90e2dcdd265d2a",
+    "url": "https://github.com/FWGS/xash3d-fwgs.git"
+  },
+  "files": {
+    "LICENSE.hlsdk": {
+      "sha256": "131212c5a670489679af77614fed8089c7ed71ce9ae3aa9333ff7718b643af84",
+      "size": 2035
+    },
+    "client_amd64.so": {
+      "sha256": "3bbe47a188eb46e8679ed0d5fe716b7387fb2cdc0b7eb3fa52b4a9360b37dcb6",
+      "size": 1195280
+    },
+    "clucraft-hl": {
+      "sha256": "296847727aaf772ab71002cbcb3226fb208e999e8f5abe052288899e38875a1f",
+      "size": 6120
+    },
+    "extras.pk3": {
+      "sha256": "7992e2c201476a9685acaf4564a661278395143c8cecbdc02d8625c73513f94d",
+      "size": 1698896
+    },
+    "filesystem_stdio.so": {
+      "sha256": "f5d776aa336ac79364e1251f63404f74178d037ea852293972c98c6bf64432d4",
+      "size": 302568
+    },
+    "hl_amd64.so": {
+      "sha256": "4b19865578f29f30bd33cd2148dc4d5f9df69a2bb568c5fb5323a741c3de6e97",
+      "size": 2040440
+    },
+    "libmenu.so": {
+      "sha256": "724852b6559b3899e7540f905bcade24cee9ee2ef1182b6ad95419976282356f",
+      "size": 906616
+    },
+    "libref_soft.so": {
+      "sha256": "b15b0877477f962a09dfc3ff117dfe3f4757473d58edcded8d7c414d2ae90037",
+      "size": 289000
+    },
+    "libxash.so": {
+      "sha256": "86376290c50024e6cd6adca4ab0cd3409394c44c20ef28dcf78e207569e98d58",
+      "size": 3736520
+    }
+  },
+  "hlsdk": {
+    "commit": "89e83b92d561f5ceb11594c2f15e2e1519bc6c36",
+    "url": "https://github.com/FWGS/hlsdk-portable.git"
+  }
+}
