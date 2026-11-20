@@ -20,6 +20,7 @@ Read-only, with the car awake on Wi-Fi and nothing plugged into its USB ports. T
 - **No thermal zone.** The CPU's own sensor read 54 to 57 C at rest and names 110 C as its limit. The service read thermal zones only; it now reads this sensor.
 - **`TasksMax` is not enforced on this car** (no `pids` controller). `CPUQuota`, `MemoryLimit` and `LimitCORE` are what limits the service here.
 - **A stick:** the modules for FAT, exFAT and NTFS are on the unit and a udev rule has udisks mount sticks at `/media/<volume name>`. How it is mounted (read-only or not, readable by `nobody` or not) is unknown until a stick is in.
+- **The owner's stick** (prepared 2026-11-20) is 57 GB, **exFAT**, without a volume name. The unit has an exFAT module, but the one owner who documented sticks had only tried FAT32. Whether this unit mounts it, and where without a name, is what the read with the stick in the car answers. If it does not, FAT32 is the fallback, and formatting is the owner's to do.
 
 ## Works on the PC
 
@@ -56,7 +57,7 @@ Each step waits for the owner. Steps 1 to 3 write nothing on the head unit.
 
 | | Step | Who | Writes on the head unit | Undo |
 |---|---|---|---|---|
-| 1 | Copy `valve` (517 MB, 4,250 files) from the Steam folder to the stick, as `Half-Life\valve`. The stick is not formatted; its file system and free space are looked at first | Claude, once the owner names the drive letter | Nothing | Delete the folder from the stick |
+| 1 | **Done 2026-11-20.** `valve` (4,250 files, 506 MiB) copied from the Steam folder to the stick as `Half-Life\valve`, and every file compared with the source by SHA-256: identical. The stick was empty and was not formatted. The service's own finder, pointed at it on the PC, finds the game there | Claude | Nothing | Delete the folder from the stick |
 | 2 | Stick and pad into the car; one more run of `tools/probe/20-usb-snapshot.sh` | Owner plugs, Claude reads | Nothing | - |
 | 3 | `df` once, for the free space under `/var/opt` | Claude, with the owner's OK (it is not on the ten-command list) | Nothing | - |
 | 4 | Push the commits made since the last push | Claude, with the owner's OK | Nothing | - |
@@ -101,7 +102,7 @@ If something goes wrong: the game is a child of the service and the service is o
 
 Waiting on the owner:
 
-1. The stick's drive letter on the PC, for the copy.
+1. ~~The stick's drive letter on the PC, for the copy.~~ Done.
 2. Stick and pad plugged into the car, for the second read.
 3. OK to run `df` on the unit (it is not on the ten-command list).
 4. Public repository, or a token for the Store?
