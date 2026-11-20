@@ -38,6 +38,7 @@ that service:
              own commands there are four of ours:
                mgu_key <key> <0|1>          a key or pad button, by the engine's key number
                mgu_axis <axis> <value>      a pad axis, 0..5, -32767..32767
+               mgu_pad <0|1>                a gamepad is being read: lay out its buttons
                mgu_touch <0|1|2> <x> <y>    finger down, up, moved; 0..1 across the picture
                mgu_hold <0|1>               stop the main loop, or let it run again
              When stdin ends, the service is gone and the engine quits.
@@ -301,6 +302,18 @@ static void MGU_Axis_f( void )
 		Joy_AxisMotionEvent( (engineAxis_t)axis, (short)bound( -32767, value, 32767 ));
 }
 
+/*
+mgu_pad 1: the service reads a gamepad now. The engine then lays out its
+buttons the way it does for an Xbox pad (the "xbox" preset from its own
+extras pack: triggers fire, A jumps, Menu opens the game's menu), once, and
+never over bindings the player has changed.
+*/
+static void MGU_Pad_f( void )
+{
+	if( Cmd_Argc() == 2 && Q_atoi( Cmd_Argv( 1 )) != 0 )
+		Joy_SetCapabilities( false, 0, "xbox" );
+}
+
 static void MGU_Touch_f( void )
 {
 	int type;
@@ -501,6 +514,7 @@ void MGU_Init( void )
 
 	Cmd_AddRestrictedCommand( "mgu_key", MGU_Key_f, "a key or pad button from the service: <key number> <0|1>" );
 	Cmd_AddRestrictedCommand( "mgu_axis", MGU_Axis_f, "a pad axis from the service: <axis 0..5> <value>" );
+	Cmd_AddRestrictedCommand( "mgu_pad", MGU_Pad_f, "the service reads a gamepad: <0|1>" );
 	Cmd_AddRestrictedCommand( "mgu_touch", MGU_Touch_f, "a finger from the service: <0 down|1 up|2 moved> <x 0..1> <y 0..1>" );
 }
 

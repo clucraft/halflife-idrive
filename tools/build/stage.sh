@@ -17,9 +17,10 @@ to="$repo/native/clucraft-halflife/bin"
 [ -f "$from/BUILD.json" ] || { echo "nothing built yet in $from: run tools/build/build.sh"; exit 1; }
 bash "$repo/tools/build/check-elf.sh" "$from" >/dev/null || { echo "the build does not pass tools/build/check-elf.sh: not staged"; exit 1; }
 
+# (bin/ also holds the gamepad's program and its PAD.json, which
+# tools/build/build-pad.js makes: they are left as they are)
 mkdir -p "$to"
-rm -f "$to"/*
-cp "$from"/* "$to/"
+cp -f "$from"/* "$to/"
 
 echo "staged in native/clucraft-halflife/bin:"
 (cd "$to" && ls -l | sed 1d | awk '{ printf "%10s  %s\n", $5, $9 }')

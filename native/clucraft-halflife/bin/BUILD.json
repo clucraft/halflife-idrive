@@ -5,7 +5,7 @@
     "image": "ubuntu:18.04"
   },
   "engine": {
-    "backend": "cbd4d03c5e54b78714e4130c07c60d4930ae06003d4cf6b8c215586657d319b4",
+    "backend": "29d6bbcbcd8d1bc6678192ddb5cb17a60b2e0ccbfc8e02dd3eaf608c6d743feb",
     "commit": "11ed246c885d710ca1682370c66ee6594ac2d25a",
     "patch": "ed3d4d49d5922a12dc2073319728c8c8db55b8f18277c181bf90e2dcdd265d2a",
     "url": "https://github.com/FWGS/xash3d-fwgs.git"
@@ -44,7 +44,7 @@
       "size": 289000
     },
     "libxash.so": {
-      "sha256": "86376290c50024e6cd6adca4ab0cd3409394c44c20ef28dcf78e207569e98d58",
+      "sha256": "3cacf8d5a7a0027de4013fba73a9d5033239668576d8d2a6525281f43d7c5bde",
       "size": 3736520
     }
   },
