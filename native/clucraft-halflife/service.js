@@ -58,6 +58,23 @@ function mkdirp(d) {
     try { fs.mkdirSync(d, 0o700); } catch (e) { if (e.code !== 'EEXIST') throw e; }
 }
 
+// The hottest reading in degrees C, or null. The owner's car (J18_21w31) has no thermal zone at all: its only
+// sensor is the CPU's own under hwmon (coretemp: the package and the four cores).
+function temperature(thermal, hwmon) {
+    const temps = [];
+    const take = (file) => { const v = Number(readText(file)); if (isFinite(v) && v > 0) temps.push(v); };
+    try {
+        fs.readdirSync(thermal).filter((n) => /^thermal_zone\d+$/.test(n)).forEach((n) => take(path.join(thermal, n, 'temp')));
+    } catch (e) { /* no thermal zones here */ }
+    try {
+        fs.readdirSync(hwmon).filter((n) => /^hwmon\d+$/.test(n)).forEach((n) => {
+            const d = path.join(hwmon, n);
+            fs.readdirSync(d).filter((f) => /^temp\d+_input$/.test(f)).forEach((f) => take(path.join(d, f)));
+        });
+    } catch (e) { /* no sensors here */ }
+    return temps.length ? Math.round(Math.max.apply(null, temps) / 1000) : null;
+}
+
 function createService(opts) {
     const env = process.env;
     const o = Object.assign({
@@ -71,6 +88,7 @@ function createService(opts) {
         dev: env.HLD_DEV === '1',
         fps: Number(env.HLD_FPS) || 30,
         thermal: env.HLD_THERMAL || '/sys/class/thermal',
+        hwmon: env.HLD_HWMON || '/sys/class/hwmon',
         now: Date.now,
         idleMs: IDLE_MS, beatMs: BEAT_MS, goneMs: GONE_MS, heldMs: HELD_MS, hangMs: HANG_MS,
         engine: {},
@@ -78,7 +96,9 @@ function createService(opts) {
     }, opts || {});
     const now = o.now;
     const lines = [];
+    let lineNo = 0;   // how many lines were logged in all (the app copies the ones it has not seen into its own log)
     function log(s) {
+        lineNo++;
         lines.push(new Date(now()).toISOString().slice(11, 19) + ' ' + s);
         if (lines.length > LOG_LINES) lines.shift();
         console.log(s);
@@ -92,7 +112,7 @@ function createService(opts) {
     let sys = null, cpuLast = null, sysAt = 0, perfAt = 0;
 
     /* ---------- the game data and the place for saves ---------- */
-    let found = null, foundAt = 0, base = null;
+    let found = null, foundAt = 0, base = null, baseKey = null, baseAt = 0, baseWhy = null, dataSaid = null;
     function data() {
         if (found && now() - foundAt < 3000) return found;
         if (o.dataRoot) {
@@ -102,7 +122,18 @@ function createService(opts) {
         } else found = GD.find({ mounts: o.mounts, roots: o.roots });
         foundAt = now();
         // where saves go follows the stick: looked at again whenever the data is
-        try { base = GD.pickBase(found.found ? found.mount : null, o.stateDir); } catch (e) { base = null; log('saves: ' + e.message); }
+        // Where saves go is decided once per stick as it is mounted, not at every look: deciding it tries the stick
+        // with a file, and a stick must not be written to every few seconds. (No place found: tried again, seldom.)
+        const m = found.found ? found.mount : null;
+        const key = m ? [m.dir, m.dev, m.type, m.ro ? 'ro' : 'rw'].join('|') : 'none';
+        if (key !== baseKey || (!base && now() - baseAt > 30000)) {
+            baseKey = key; baseAt = now(); baseWhy = null;
+            try { base = GD.pickBase(m, o.stateDir); } catch (e) { base = null; baseWhy = e.message; }
+        }
+        // said once, and again when it changes: the first thing to know of a run on a car
+        const say = (found.found ? 'game data: ' + found.root + (m ? ' (' + m.type + ', mounted ' + (m.ro ? 'read-only' : 'writable') + ')' : '') : 'game data: ' + found.why)
+            + '; saves: ' + (base ? base.where + ', ' + base.dir + (base.why ? ' (' + base.why + ')' : '') : 'no place (' + baseWhy + ')');
+        if (say !== dataSaid) { dataSaid = say; log(say); }
         return found;
     }
 
@@ -131,11 +162,7 @@ function createService(opts) {
             cpuLast = { pid: st.pid, ticks, t };
             s.rssMb = Math.round(Number(f[21]) * PAGE / 1048576);
         } else cpuLast = null;
-        try {
-            const temps = fs.readdirSync(o.thermal).filter((n) => /^thermal_zone\d+$/.test(n))
-                .map((n) => Number(readText(path.join(o.thermal, n, 'temp')))).filter((v) => isFinite(v) && v > 0);
-            if (temps.length) s.tempC = Math.round(Math.max.apply(null, temps) / 1000);
-        } catch (e) { /* no thermal zones here */ }
+        s.tempC = temperature(o.thermal, o.hwmon);
         const la = readText('/proc/loadavg');
         if (la) s.load = Number(la.split(' ')[0]);
         const mi = readText('/proc/meminfo'), ma = mi && /MemAvailable:\s+(\d+) kB/.exec(mi);
@@ -159,9 +186,11 @@ function createService(opts) {
         eng.clearError();
         let mode = m.mode === 'new' || m.mode === 'continue' ? m.mode : 'menu';
         if (mode === 'continue' && !eng.hasSave(base.dir)) mode = 'menu';
-        want = { size: size[0] + 'x' + size[1], mode };
+        // (the app may ask for a silent game: the engine then opens no sound device at all)
+        const sound = o.sound && m.sound !== false;
+        want = { size: size[0] + 'x' + size[1], mode, sound };
         holdSent = null; heldSince = 0; perfAt = now();
-        if (!eng.start({ root: d.root, base: base.dir, width: size[0], height: size[1], mode, sound: o.sound, alsa: o.alsa, alsaRate: o.alsaRate, fps: o.fps, dev: o.dev }))
+        if (!eng.start({ root: d.root, base: base.dir, width: size[0], height: size[1], mode, sound, alsa: o.alsa, alsaRate: o.alsaRate, fps: o.fps, dev: o.dev }))
             refused = eng.state().error || 'The engine did not start.';
         else gp.want(true);
     }
@@ -177,11 +206,12 @@ function createService(opts) {
             engine: { state: st.state, held: st.held, since: st.since || null, stat: st.stat, statAge: st.statAge, exits: st.exits, last: st.last, error: st.error, want },
             gate: { parked: gate.parked, shown: gate.shown, age: gate.at ? now() - gate.at : null, fresh: fresh() },
             video: { file: st.videoPath },
-            sound: o.sound,
+            sound: o.sound && !(st.state !== 'stopped' && want && want.sound === false),   // (of the game that runs, while one does)
             pad: gp.state(),
             sys: st.state !== 'stopped' ? sys : null,
             sizes: Object.keys(SIZES),
             last: lines[lines.length - 1] || null,
+            log: { service: lineNo, engine: eng.logNo() },
         };
     }
 
@@ -192,7 +222,7 @@ function createService(opts) {
         else if (cmd === 'input') return { n: mayRun() ? eng.input(m.ev) : 0 };
         else if (cmd === 'start') start(m);
         else if (cmd === 'stop') { refused = null; await eng.stop('the app asked'); }
-        else if (cmd === 'log') return { service: lines.slice(-40), engine: eng.log(60) };
+        else if (cmd === 'log') return { service: lines.slice(-40), engine: eng.log(60), no: { service: lineNo, engine: eng.logNo() } };
         else if (cmd === 'exit') setTimeout(() => stop(0), 50);
         return status();
     }
@@ -238,7 +268,8 @@ function createService(opts) {
                 perfAt = t;
                 const s = sample();
                 log('game: ' + (st.stat ? st.stat.state + (st.stat.map ? ' ' + st.stat.map : '') + ', ' + st.stat.fps + ' fps' : '?') + ', cpu ' + (s.cpu === null ? '?' : s.cpu + '%')
-                    + ', ' + (s.rssMb === null ? '?' : s.rssMb) + ' MB' + (s.tempC === null ? '' : ', ' + s.tempC + ' C') + (s.load === null ? '' : ', load ' + s.load));
+                    + ', ' + (s.rssMb === null ? '?' : s.rssMb) + ' MB' + (s.tempC === null ? '' : ', ' + s.tempC + ' C') + (s.load === null ? '' : ', load ' + s.load)
+                    + (st.stat ? ', ' + st.stat.w + 'x' + st.stat.h + ', sound ' + (st.stat.sound ? 'on' : 'off') + ', underruns ' + st.stat.underruns + ', stands ' + st.stat.stands : ''));
             }
         } else if (st.state === 'stopped' && !stopping && t - lastReq > o.idleMs) {
             log('idle: ending');
@@ -247,7 +278,7 @@ function createService(opts) {
     }
 
     function start0() {
-        log('clucraft-halflife ' + VERSION + ' (uid ' + (process.getuid ? process.getuid() : '?') + ')');
+        log('clucraft-halflife ' + VERSION + ' (uid ' + (process.getuid ? process.getuid() : '?') + (process.getgroups ? ', groups ' + process.getgroups().join(' ') : '') + ', node ' + process.version + ')');
         try { mkdirp(o.stateDir); } catch (e) { log('state folder: ' + e.message); }
         data();
         eng.selftest().then((r) => {
@@ -289,4 +320,4 @@ if (require.main === module) {
     process.on('SIGINT', () => svc.stop(0));
 }
 
-module.exports = { createService, VERSION, SIZES };
+module.exports = { createService, temperature, VERSION, SIZES };

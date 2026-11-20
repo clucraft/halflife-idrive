@@ -59,9 +59,10 @@ function createEngine(o) {
     const videoPath = o.videoPath || VIDEO_PATH;
     const st = { state: 'stopped', held: false, pid: null, since: 0, stat: null, statAt: 0, exits: 0, last: null, error: null };
     const ring = [];
+    let ringNo = 0;   // how many lines the engine has said in all: the app copies the ones it has not seen
     let cur = null;   // { child, done, onEnded: [], why }
 
-    function keep(s) { ring.push(s); if (ring.length > LOG_LINES) ring.shift(); }
+    function keep(s) { ring.push(s); ringNo++; if (ring.length > LOG_LINES) ring.shift(); }
     const removeVideo = () => { try { fs.unlinkSync(videoPath); } catch (e) { /* none */ } };
     // (o.exe, o.args, o.files: the tests' stand-in engine is a script)
     const missing = () => (o.files || FILES).filter((f) => !fs.existsSync(path.join(binDir, f)));
@@ -114,10 +115,11 @@ function createEngine(o) {
         const c = { child, done: false, onEnded: [], why: null, timers: [] };
         cur = c;
         Object.assign(st, { state: 'starting', held: false, pid: child.pid, since: now(), stat: null, statAt: now(), error: null });
-        log('engine: started (pid ' + child.pid + ', ' + p.width + 'x' + p.height + ', ' + (p.mode || 'menu') + ', data ' + p.root + ', saves ' + p.base + ')');
+        log('engine: started (pid ' + child.pid + ', ' + p.width + 'x' + p.height + ', ' + (p.mode || 'menu') + (p.sound === false ? ', no sound' : '') + ', data ' + p.root + ', saves ' + p.base + ')');
         child.stdin.on('error', () => { /* it went: its exit says so */ });
         lines(child.stdout, (l) => { l = plain(l); if (l) keep(l); });
-        lines(child.stderr, (l) => { l = plain(l); if (l) { keep(l); log('engine: ' + l); } });
+        // (stderr goes to the service's log too, marked as the engine's own words: the app copies those from the ring)
+        lines(child.stderr, (l) => { l = plain(l); if (l) { keep(l); log('engine says: ' + l); } });
         lines(child.stdio[3], (l) => {
             if (l.indexOf('MGU ') !== 0) return;
             let ev;
@@ -203,7 +205,7 @@ function createEngine(o) {
     }
     const hasSave = (base) => { try { return fs.statSync(path.join(base, 'valve', 'save', SAVE_NAME + '.sav')).isFile(); } catch (e) { return false; } };
 
-    return { selftest, start, hold, pad, input, stop, killSync, state, log: (n) => ring.slice(-(n || 40)), hasSave, missing, binDir, clearError() { st.error = null; } };
+    return { selftest, start, hold, pad, input, stop, killSync, state, log: (n) => ring.slice(-(n || 40)), logNo: () => ringNo, hasSave, missing, binDir, clearError() { st.error = null; } };
 }
 
 module.exports = { createEngine, VIDEO_PATH, ALSA_DEVICE, ALSA_RATE, SAVE_NAME, FILES };

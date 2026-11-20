@@ -76,7 +76,7 @@ function serviceOptions(tmp, stick, more) {
         videoPath: path.join(tmp, 'video'), env: {},
     }, m.engine || {});
     return Object.assign({
-        stateDir: path.join(tmp, 'state'), mounts: stick.mounts, roots: [stick.media], exit: false, thermal: path.join(tmp, 'no-thermal'),
+        stateDir: path.join(tmp, 'state'), mounts: stick.mounts, roots: [stick.media], exit: false, thermal: path.join(tmp, 'no-thermal'), hwmon: path.join(tmp, 'no-hwmon'),
         // the gamepad: the stand-in for its program (test/fake-usbpipe.js), and no pad plugged in unless a test says so
         // (never this computer's own USB devices)
         padPipe: [process.execPath, path.join(ROOT, 'test', 'fake-usbpipe.js')], padFind: () => [],
@@ -93,7 +93,7 @@ async function createStage(opts) {
     const svc = createService(serviceOptions(tmp, stick, Object.assign(plugged, o.service || {}, { engine: Object.assign({ env: o.engineEnv || {} }, (o.service && o.service.engine) || {}) })));
     svc.start();
 
-    const values = Object.assign({ size: '1280x480', touch: false, stats: false }, o.settings || {});
+    const values = Object.assign({ size: '1280x480', sound: true, touch: false, stats: false }, o.settings || {});
     const settings = { get: (k) => values[k], set: (k, v) => { values[k] = v; } };
     // o.carPaths: what the service says is shown with the head unit's paths in place of this computer's temporary
     // folder (for pictures: a page should look as it does in the car)

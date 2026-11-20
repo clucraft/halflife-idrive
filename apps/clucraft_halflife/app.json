@@ -89,6 +89,12 @@
       ]
     },
     {
+      "key": "sound",
+      "label": "Sound (off: the game runs silent and leaves the speakers alone)",
+      "type": "bool",
+      "default": true
+    },
+    {
       "key": "touch",
       "label": "Touch in the game's menus (off: a touch on the game leaves it)",
       "type": "bool",

@@ -117,6 +117,20 @@ test('saves: on the stick only when it is mounted writable and really takes a fi
     assert.strictEqual(GD.pickBase(null, state).where, 'unit');
 });
 
+test('saves: a writable stick is tried with a file once when it is found, not at every look', async () => {
+    let t = Date.now();
+    const s = service({ stick: 'rw', service: { now: () => t } });
+    try {
+        const first = await s.ask({ cmd: 'status' });
+        assert.strictEqual(first.saves.where, 'stick');
+        const dir = first.saves.dir, was = fs.statSync(dir).mtimeMs;
+        await sleep(40);                        // (a later file made there would show in the folder's time)
+        // the service looks at the stick again every three seconds while the app asks
+        for (let i = 0; i < 5; i++) { t += 4000; assert.strictEqual((await s.ask({ cmd: 'status' })).saves.where, 'stick'); }
+        assert.strictEqual(fs.statSync(dir).mtimeMs, was, 'the stick was written to again');
+    } finally { await s.close(); }
+});
+
 test('drive gate: parked only on a fresh speed under 1 km/h with the selector in P; anything unknown is not parked', () => {
     const DG = require(path.join(APP, 'drivegate'));
     let t = 1000000;
@@ -465,7 +479,58 @@ test('service: no stick, or a stick without the game: no game, and the reason is
     }
 });
 
+test('service: the temperature is the hottest sensor; the owner\'s car has no thermal zone, only the CPU\'s under hwmon', () => {
+    const { temperature } = require(path.join(SVC, 'service'));
+    const tmp = tmpdir('hl-temp-');
+    const mkdirs = (d) => { if (!fs.existsSync(d)) { mkdirs(path.dirname(d)); fs.mkdirSync(d); } };   // (Node 8 has no "recursive")
+    const put = (file, text) => { mkdirs(path.dirname(file)); fs.writeFileSync(file, text); };
+    const thermal = path.join(tmp, 'thermal'), hwmon = path.join(tmp, 'hwmon');
+    // nothing to read: no reading, and no error
+    assert.strictEqual(temperature(thermal, hwmon), null);
+    // the car as probed on 2026-11-20: cooling devices but no zone; coretemp with the package and four cores
+    put(path.join(thermal, 'cooling_device0', 'type'), 'Processor\n');
+    put(path.join(hwmon, 'hwmon0', 'name'), 'coretemp\n');
+    [57000, 57000, 57000, 54000, 54000].forEach((v, i) => {
+        put(path.join(hwmon, 'hwmon0', 'temp' + (i + 1) + '_input'), v + '\n');
+        put(path.join(hwmon, 'hwmon0', 'temp' + (i + 1) + '_crit'), '110000\n');      // a limit, not a reading
+    });
+    assert.strictEqual(temperature(thermal, hwmon), 57);
+    // a unit that has zones too: the hottest of both
+    put(path.join(thermal, 'thermal_zone0', 'temp'), '61500\n');
+    put(path.join(thermal, 'thermal_zone1', 'temp'), '-1\n');                         // a zone that tells nothing
+    assert.strictEqual(temperature(thermal, hwmon), 62);
+});
+
 /* ---------------- the app: its store and pages ---------------- */
+
+test('app: what the service and the engine say is copied into the app\'s own log, each line once', async () => {
+    const { createStore } = require(path.join(APP, 'store'));
+    const s = service({ service: { beatMs: 400, engine: { env: { FAKE_STAT_MS: '60' } } } });
+    const got = [];
+    const S = createStore({ ask: (m) => s.ask(m), settings: { get: () => '1280x480' }, log: { info: (x) => got.push(x), warn() {} } });
+    const timer = setInterval(() => S.poll(true, true), 60);
+    const has = (re) => () => got.some((x) => re.test(x));
+    try {
+        // the service's first words: who it runs as, where the game data and the saves are, whether the engine loads
+        await until(has(/^service: [0-9:]+ clucraft-halflife \S+ \(uid /), 6000, 'the service\'s first line');
+        await until(has(/^service: [0-9:]+ game data: .*; saves: /), 3000, 'the place of the data and the saves');
+        await until(has(/^service: [0-9:]+ MGU selftest: passed/), 6000, 'the self-test');
+        assert.ok(await S.play('new', true), S.toastText());
+        // the engine's start, and the engine's own words
+        await until(has(/^service: [0-9:]+ engine: started \(pid \d+, 1280x480, new, /), 3000, 'the start');
+        await until(has(/^engine: a stand-in engine: 1280x480/), 3000, 'the engine\'s own line');
+        await until(has(/^service: [0-9:]+ engine: running/), 3000, 'the engine running');
+        await S.stop();
+        await until(has(/^service: [0-9:]+ engine: ended \(code 0, the app asked\)/), 6000, 'the end');
+        await sleep(300);
+        const svcLines = got.filter((x) => /^service: /.test(x));
+        assert.strictEqual(new Set(svcLines).size, svcLines.length, 'a line was copied twice:\n' + svcLines.join('\n'));
+        assert.ok(!got.some((x) => /^service: .* engine says: /.test(x)), 'the engine\'s words were copied from both logs');
+        // as many of the service's lines as it logged, no more
+        const no = (await s.ask({ cmd: 'log' })).no;
+        assert.strictEqual(svcLines.length, no.service - (await s.ask({ cmd: 'log' })).service.filter((x) => / engine says: /.test(x)).length);
+    } finally { clearInterval(timer); await s.close(); }
+});
 
 test('app: from the launcher into a game and back, by taps; BACK leaves the game, which then stands still', async () => {
     const st = await createStage({ service: { beatMs: 400, engine: { env: { FAKE_STAT_MS: '60' } } } });
@@ -525,6 +590,26 @@ function hasVideo(cv) {
     return found;
 }
 
+test('app: with the setting "Sound" off a game starts silent, and the service says which kind of game runs', async () => {
+    const st = await createStage({ settings: { sound: false }, service: { beatMs: 400, engine: { env: { FAKE_STAT_MS: '60' } } } });
+    try {
+        await st.until(() => st.S.st && st.S.st.selftest, 6000, 'the self-test');
+        assert.strictEqual(st.S.st.sound, true, 'no game runs: the service can make sound');
+        assert.ok(await st.S.play('new', true), st.S.toastText());
+        await st.until(() => st.S.stat() && st.S.stat().state === 'game', 6000, 'the game');
+        // the engine was started without a sound device (the stand-in tells it as the real one does), and main.js
+        // routes the speakers only while this is true
+        assert.deepStrictEqual([st.S.stat().sound, st.S.st.sound, st.S.engine().want.sound], [0, false, false]);
+        await st.S.stop();
+        await st.until(() => !st.S.running(), 6000, 'the end');
+        // the next start, with the setting on
+        st.settings.set('sound', true);
+        assert.ok(await st.S.play('new', true), st.S.toastText());
+        await st.until(() => st.S.stat() && st.S.stat().state === 'game', 6000, 'the game');
+        assert.deepStrictEqual([st.S.stat().sound, st.S.st.sound, st.S.engine().want.sound], [1, true, true]);
+    } finally { await st.close(); }
+});
+
 test('app: every page draws, with the service missing, not open yet, without a stick and with an engine that fails', async () => {
     const draw = async (st, pages) => {
         for (const p of pages || ['home', 'status', 'log']) {
@@ -580,7 +665,7 @@ test('app: every page draws, with the service missing, not open yet, without a s
 
 /* ---------------- main.js, from the staged package ---------------- */
 
-test('main.js: starts on a stand-in head unit from the staged package; the beat, the full view, the controller, the speakers', async () => {
+test('main.js: starts on a stand-in head unit from the staged package; the beat, the full view, the controller, the speakers, a silent game', async () => {
     const py = ['python3', 'python'].filter((p) => { try { return spawnSync(p, ['--version']).status === 0; } catch (e) { return false; } })[0];
     if (!py) { print('     (skipped: no Python 3 for the kit\'s build)'); return; }
     // the kit's build needs an SDK folder: a clearly marked stand-in, never loaded here and refused by a car build
@@ -756,6 +841,19 @@ test('main.js: starts on a stand-in head unit from the staged package; the beat,
         await until(() => status().then((x) => x.engine.state === 'stopped'), 12000, 'the game ending');
         await frames(600);
         assert.strictEqual((await status()).saves.canContinue, true);
+
+        // the setting "Sound" off: the next game starts silent, and the speakers are left alone
+        settings.set('sound', false);
+        const connects = calls.filter((c) => c.method === 'connect').length;
+        await frames(400);
+        tap('new');
+        await frames(2500);
+        st = await status();
+        assert.deepStrictEqual([st.engine.state, st.engine.stat.sound, st.sound], ['running', 0, false], JSON.stringify(st.engine));
+        assert.deepStrictEqual([calls.filter((c) => c.method === 'connect').length, mains.length], [connects, 0], 'a silent game asked for the speakers');
+        clicks.BTN_STOP();
+        await until(() => status().then((x) => x.engine.state === 'stopped'), 12000, 'the silent game ending');
+        await frames(400);
         assert.deepStrictEqual(logged.error, [], 'main.js logged errors');
         assert.ok(logged.info.some((l) => /^started 0\.1\.0/.test(l)), logged.info.join('\n'));
     } finally {

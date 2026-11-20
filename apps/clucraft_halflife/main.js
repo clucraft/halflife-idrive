@@ -97,7 +97,8 @@ mgu.run({
 
             /* ---------- the beat: the car and the screen, told to the service twice a second ---------- */
             let lastBeat = 0;
-            const afterBeat = guard('after beat', () => audio.want(S.running() && shown() && gate.parked()));
+            // (the speakers only for a game that was started with sound: the service says which it is)
+            const afterBeat = guard('after beat', () => audio.want(S.running() && S.st.sound !== false && shown() && gate.parked()));
             setInterval(guard('beat', () => {
                 const t = Date.now();
                 if (t - lastBeat < BEAT_MS) return;
@@ -138,7 +139,10 @@ mgu.run({
             ui.onClick('BTN_STOP', guard('stop', () => { if (S.running()) S.stop(); }));
             ui.onClick('BTN_STATUS', guard('status', () => S.go(S.page === 'status' ? 'home' : S.page === 'home' ? 'status' : 'home')));
             if (typeof ctx.onBack === 'function') ctx.onBack(guard('back', () => S.back()));
-            settings.onChange(guard('settings', (k) => { if (k === 'size' && S.running()) S.say('The new picture size is used from the next start of the game'); }));
+            settings.onChange(guard('settings', (k) => {
+                if (k === 'size' && S.running()) S.say('The new picture size is used from the next start of the game');
+                if (k === 'sound' && S.running()) S.say('Sound ' + (settings.get('sound') === false ? 'off' : 'on') + ' from the next start of the game');
+            }));
 
             /* ---------- the frame ---------- */
             ctx.loop('MAIN', 10, guard('draw', async () => {

@@ -95,6 +95,26 @@ Edit upstream files in `<work>/xash3d-fwgs`, then run `bash tools/build/save-pat
 
 `tools/run/service.sh` runs in a container with no network, a read-only root and the game data mounted read-only. Sound goes to a 48 kHz device with a clock and no speakers (a PulseAudio null sink), and what arrives there is recorded and checked.
 
+## Reading a run back from the car
+
+The app copies what the service and the engine say into its own log, which is a plain file on the head unit:
+
+```sh
+cat /var/opt/public/oap/oap_<uid>/data/clucraft_halflife.log
+```
+
+`<uid>` is the app's user; `/var/opt/mgu-deploy/state.json` names it. Lines marked `service:` are the service's (who it runs as, where the data and the saves are, the engine's check, starts, holds and ends, and every 15 seconds of a game its frame rate, CPU, memory, temperature, load and sound counters). Lines marked `engine:` are the engine's own console. The file is kept under 2 MB by the kit.
+
+## Before the first run on the car (2026-11-20)
+
+Three changes after the read-only probe of the car (RECON.md, section 10), all tested on the PC only:
+
+- The temperature comes from the CPU's hwmon sensor when the unit has no thermal zone, as the owner's car has none.
+- The run is copied into the app's log (above).
+- A setting "Sound". Off, the engine opens no sound device and the app leaves the speakers alone, so a first run can be the picture alone.
+
+The engine's binaries are unchanged.
+
 ## Phase 2 results (2026-11-19)
 
 All on the PC. None of it has run on the car.

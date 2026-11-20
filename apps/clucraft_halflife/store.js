@@ -30,6 +30,7 @@ function createStore(o) {
         busy: null,        // 'start' | 'stop' while one is asked for
     };
     let wasRunning = false, polling = false;
+    let seen = null, copying = false;   // the service's and the engine's lines already in this app's log
 
     S.say = (text) => { S.toast = { text: String(text), until: now() + TOAST_MS }; };
     S.toastText = () => (S.toast && S.toast.until > now() ? S.toast.text : null);
@@ -61,6 +62,26 @@ function createStore(o) {
         wasRunning = running;
         return s;
     }
+    // The service's log is in the head unit's memory and the engine's in the service's: both are gone with them.
+    // This app's log is a file on the unit, so what they say is copied there, each line once: the frame rate, the
+    // load and the temperature of a game, why one stood still or ended, what the engine said of the sound.
+    function copyLog(s) {
+        const no = s && s.log;
+        if (!no || copying || (seen && seen.service === no.service && seen.engine === no.engine)) return;
+        copying = true;
+        o.ask({ cmd: 'log' }, 4000).then((l) => {
+            copying = false;
+            if (!l || !l.no) return;
+            // (a service that started anew counts from nothing again)
+            const had = seen && seen.service <= l.no.service && seen.engine <= l.no.engine ? seen : { service: 0, engine: 0 };
+            const fresh = (arr, last, before) => (arr || []).filter((x, i) => last - (arr.length - 1 - i) > before);
+            // (what the engine says on stderr is in both: taken from the engine's)
+            fresh(l.service, l.no.service, had.service).filter((x) => !/^[0-9:]+ engine says: /.test(x)).forEach((x) => log.info('service: ' + x));
+            fresh(l.engine, l.no.engine, had.engine).forEach((x) => log.info('engine: ' + x));
+            seen = { service: l.no.service, engine: l.no.engine };
+        }, () => { copying = false; });
+    }
+
     function failed(e) {
         S.err = { code: e.code || 'ERR', message: e.message || String(e) };
         S.st = null;
@@ -73,7 +94,7 @@ function createStore(o) {
         if (polling) return Promise.resolve(S.st);
         polling = true;
         return o.ask({ cmd: 'beat', parked: parked === true, shown: shown === true }, 4000)
-            .then(took, failed).then((v) => { polling = false; return v; });
+            .then(took, failed).then((v) => { polling = false; copyLog(v); return v; });
     };
 
     S.play = (mode, parked) => {
@@ -83,10 +104,12 @@ function createStore(o) {
         if (S.running()) { S.view = 'game'; return Promise.resolve(true); }
         S.busy = 'start';
         const size = String((o.settings && o.settings.get('size')) || '1280x480');
-        log.info('start: ' + mode + ', ' + size);
+        // (a first run on a car is easier to read one thing at a time: the picture without the sound)
+        const sound = !(o.settings && o.settings.get('sound') === false);
+        log.info('start: ' + mode + ', ' + size + (sound ? '' : ', without sound'));
         // the service wants a fresh "parked" before it starts anything: said first, in the same breath
         return o.ask({ cmd: 'beat', parked: true, shown: false }, 4000)
-            .then(() => o.ask({ cmd: 'start', mode, size }, 8000))
+            .then(() => o.ask({ cmd: 'start', mode, size, sound }, 8000))
             .then((s) => {
                 S.busy = null;
                 took(s);
