@@ -1,5 +1,5 @@
 diff --git a/common/backends.h b/common/backends.h
-index 1003ad46..33470b9a 100644
+index 1003ad46..b0562411 100644
 --- a/common/backends.h
 +++ b/common/backends.h
 @@ -22,6 +22,7 @@ GNU General Public License for more details.
@@ -10,8 +10,16 @@ index 1003ad46..33470b9a 100644
  
  // audio backends (XASH_SOUND)
  #define SOUND_NULL     0
+@@ -29,6 +30,7 @@ GNU General Public License for more details.
+ #define SOUND_PSP      2
+ #define SOUND_ALSA     3
+ #define SOUND_PS4      4
++#define SOUND_MGU      5 // BMW iDrive 7 head unit: ALSA, at whatever buffer the car's sound service imposes, see engine/platform/mgu
+ 
+ // input (XASH_INPUT)
+ #define INPUT_NULL    0
 diff --git a/common/defaults.h b/common/defaults.h
-index a48e47f5..56af3eb4 100644
+index a48e47f5..748a80bd 100644
 --- a/common/defaults.h
 +++ b/common/defaults.h
 @@ -34,6 +34,10 @@ SETUP BACKENDS DEFINITIONS
@@ -21,7 +29,7 @@ index a48e47f5..56af3eb4 100644
 +	#elif XASH_MGU // BMW iDrive 7 head unit: no SDL, no kernel input layer, see engine/platform/mgu
 +		#define XASH_VIDEO     VIDEO_MGU
 +		#define XASH_INPUT     INPUT_NULL
-+		#define XASH_SOUND     SOUND_ALSA
++		#define XASH_SOUND     SOUND_MGU
  	#elif XASH_LINUX // we are building for Linux without SDL, only framebuffer is supported for now
  		#define XASH_VIDEO     VIDEO_FBDEV
  		#define XASH_INPUT     INPUT_EVDEV

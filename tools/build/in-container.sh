@@ -51,6 +51,65 @@ mkdir -p "$out/game"
 find /work/build-hlsdk -name '*_amd64.so' -exec cp {} "$out/game/" \;
 cp /work/hlsdk-portable/LICENSE "$out/game/LICENSE.hlsdk" 2>/dev/null || true
 
+# What the Store tool ships (native/clucraft-halflife/bin): one flat folder,
+# stripped. The launcher gets a name of its own, because the head unit's crash
+# handler knows programs by file name and "xash3d" could be anybody's. Only
+# the launcher is executable: the Store lists every executable ELF file with
+# the crash handler, and the libraries are not programs.
+echo "== tool files"
+tool="$out/tool"
+rm -rf "$tool"
+mkdir -p "$tool"
+cp "$out/engine/xash3d" "$tool/clucraft-hl"
+cp "$out/engine/libxash.so" "$out/engine/filesystem_stdio.so" \
+   "$out/engine/libref_soft.so" "$out/engine/libmenu.so" \
+   "$out/game/hl_amd64.so" "$out/game/client_amd64.so" "$tool/"
+strip --strip-unneeded "$tool"/clucraft-hl "$tool"/*.so
+cp "$out/engine/valve/extras.pk3" "$tool/extras.pk3"
+cp "$out/game/LICENSE.hlsdk" "$tool/LICENSE.hlsdk"
+chmod 0755 "$tool/clucraft-hl"
+chmod 0644 "$tool"/*.so "$tool/extras.pk3" "$tool/LICENSE.hlsdk"
+
+# What these files were built from, so the copy committed in the repository
+# can be checked against its sources (test/run.js does).
+. /repo/port/pins.env
+ENGINE_URL="$ENGINE_URL" HLSDK_URL="$HLSDK_URL" HL_FLAGS="$opt" python3 - "$tool" <<'EOF'
+import hashlib, json, os, subprocess, sys
+
+tool = sys.argv[1]
+sha = lambda data: hashlib.sha256(data).hexdigest()
+lf = lambda data: data.replace(b'\r\n', b'\n')
+rev = lambda d: subprocess.check_output(['git', '-C', d, 'rev-parse', 'HEAD']).decode().strip()
+
+# this project's own engine files, as one hash: each file's path, then its text
+backend = hashlib.sha256()
+root = '/repo/port/engine'
+for d, _, names in sorted(os.walk(root)):
+    for n in sorted(names):
+        p = os.path.join(d, n)
+        backend.update((os.path.relpath(p, '/repo').replace(os.sep, '/') + '\n').encode())
+        backend.update(lf(open(p, 'rb').read()))
+
+files = {}
+for n in sorted(os.listdir(tool)):
+    if n == 'BUILD.json':
+        continue
+    data = open(os.path.join(tool, n), 'rb').read()
+    files[n] = {'size': len(data), 'sha256': sha(data)}
+
+out = {
+    'engine': {'url': os.environ['ENGINE_URL'], 'commit': rev('/work/xash3d-fwgs'),
+               'patch': sha(lf(open('/repo/port/engine.patch', 'rb').read())), 'backend': backend.hexdigest()},
+    'hlsdk': {'url': os.environ['HLSDK_URL'], 'commit': rev('/work/hlsdk-portable')},
+    'built': {'image': 'ubuntu:18.04', 'gcc': subprocess.check_output(['gcc', '-dumpfullversion']).decode().strip(),
+              'flags': os.environ['HL_FLAGS']},
+    'files': files,
+}
+with open(os.path.join(tool, 'BUILD.json'), 'w') as f:
+    json.dump(out, f, indent=2, sort_keys=True)
+    f.write('\n')
+EOF
+
 echo "== result"
 cd "$out"
 find . -type f | sort | while read -r f; do

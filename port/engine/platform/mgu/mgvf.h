@@ -55,8 +55,4 @@ typedef struct mgvf_head_s
 	uint32_t pad[6];            // 64 bytes in all
 } mgvf_head_t;
 
-// vid_mgu.c: take the frame file away without touching anything else.
-// Only unlink(), so a signal handler may call it.
-void MGU_RemoveFrameFile( void );
-
 #endif // MGVF_H

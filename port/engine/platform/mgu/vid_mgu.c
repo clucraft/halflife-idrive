@@ -19,6 +19,7 @@ GNU General Public License for more details.
 #include "filesystem.h"
 #include "vid_common.h"
 #include "mgvf.h"
+#include "mgu.h"
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
@@ -107,6 +108,13 @@ void MGU_RemoveFrameFile( void )
 {
 	if( mgu.fd >= 0 )
 		unlink( mgu.path );
+}
+
+void MGU_VideoStats( uint32_t *frames, uint32_t *width, uint32_t *height )
+{
+	*frames = mgu.frames;
+	*width = mgu.fd >= 0 ? mgu.width : 0;
+	*height = mgu.fd >= 0 ? mgu.height : 0;
 }
 
 static qboolean MGU_OpenFile( uint width, uint height )
