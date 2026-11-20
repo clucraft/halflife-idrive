@@ -139,6 +139,7 @@ Read at xash3d-fwgs `11ed246c` and hlsdk-portable `89e83b92` (both 2026-11-08). 
 ### Sound
 
 - The ALSA backend opens the device named by `-alsadev` (default `default`), S16 stereo at 44100 Hz with "rate near", period 2048 frames, non-blocking, written from the main loop with no thread. Rate and period will need matching to SmartXbar's 48 kHz and 1024 frames.
+- **Tried in Phase 2 on the PC:** that backend gives up ("cannot set params") on a device that will not take its period and buffer, and the mixer runs at 44.1 kHz whatever the device does. The port has a sound backend of its own (`port/engine/platform/mgu/snd_mgu.c`): it opens the device at 48 kHz, converts itself, and takes the device's buffer as it is.
 
 ### Input API a pad reader feeds
 
@@ -181,6 +182,8 @@ Read at xash3d-fwgs `11ed246c` and hlsdk-portable `89e83b92` (both 2026-11-08). 
 - A non-SDL client has no SIGTERM handler: it dies without saving config and leaves its frame file behind (seen in Phase 1). Our backend installs one and quits from the main loop.
 - A client reads no console commands from stdin; only the dedicated server does. Our backend adds that behind `-stdincmds`, as the service's way to talk to the engine.
 - `extras.pk3` need not sit in the game folder: `XASH3D_EXTRAS_PAK1` names it, so it can stay in the install folder.
+- The frame rate limit (`fps_max`) is not applied in a single-player game while `gl_vsync` is set, which is the default: the engine expects the display to limit it, and a frame file does not (580 frames a second in the menu, seen in Phase 2). Our backend caps the rate itself.
+- `+newgame` on the command line starts the first map, `save <name>` and `+load <name>` work from outside, and the touch entry point (`IN_TouchEvent`) moves the menu's pointer without any touch setting (all seen in Phase 2).
 - The crash handler catches SIGSEGV, SIGABRT, SIGBUS and SIGILL, prints a backtrace and then shuts down normally.
 - It writes an id file under `$HOME` unless `HOME` is unset, and reads `/etc/machine-id`, disk ids and MAC addresses to build that id.
 - It initialises HTTP and master-server code at start. The service's user has no route out, so this should fail quietly; to be watched.
