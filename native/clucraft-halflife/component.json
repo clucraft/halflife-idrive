@@ -1,0 +1,47 @@
+{
+  "id": "clucraft-halflife",
+  "kind": "tool",
+  "version": "0.1.0",
+  "license": "GPL-3.0-or-later",
+  "title": "Half-Life service",
+  "description": "For the app Half-Life: runs the game natively on the head unit with the Xash3D FWGS engine, while the app is open and the car is parked. The picture goes to mgu-render's frame file (the app shows it), the sound to SmartXbar's CarLife input. No game data is included: it reads your own copy of Half-Life (the valve folder) from a USB stick and copies none of it to the head unit. Saves go to the stick when it is writable, else to this tool's folder. Runs as nobody, never as root, with CPU and memory limits; no internet. Uninstalling removes everything it put on the head unit.",
+  "requires": {
+    "mgu-deploy": "0.7.0"
+  },
+  "uninstallable": true,
+  "mguHmi": ["ID7"],
+  "files": [
+    { "path": "service.js", "from": "service.js", "mode": "0644" },
+    { "path": "engine.js", "from": "engine.js", "mode": "0644" },
+    { "path": "gamedata.js", "from": "gamedata.js", "mode": "0644" },
+    { "path": "sockgroup.js", "from": "sockgroup.js", "mode": "0644" },
+    { "path": "check.js", "from": "check.js", "mode": "0644" },
+    { "path": "cleanup.js", "from": "cleanup.js", "mode": "0644" },
+    { "path": "bin/clucraft-hl", "from": "bin/clucraft-hl", "mode": "0755" },
+    { "path": "bin/libxash.so", "from": "bin/libxash.so", "mode": "0644" },
+    { "path": "bin/filesystem_stdio.so", "from": "bin/filesystem_stdio.so", "mode": "0644" },
+    { "path": "bin/libref_soft.so", "from": "bin/libref_soft.so", "mode": "0644" },
+    { "path": "bin/libmenu.so", "from": "bin/libmenu.so", "mode": "0644" },
+    { "path": "bin/hl_amd64.so", "from": "bin/hl_amd64.so", "mode": "0644" },
+    { "path": "bin/client_amd64.so", "from": "bin/client_amd64.so", "mode": "0644" },
+    { "path": "bin/extras.pk3", "from": "bin/extras.pk3", "mode": "0644" },
+    { "path": "bin/LICENSE.hlsdk", "from": "bin/LICENSE.hlsdk", "mode": "0644" },
+    { "path": "bin/BUILD.json", "from": "bin/BUILD.json", "mode": "0644" },
+    { "path": "LICENSE", "from": "LICENSE", "mode": "0644" },
+    { "path": "NOTICE", "from": "NOTICE", "mode": "0644" },
+    { "path": "README.md", "from": "README.md", "mode": "0644" }
+  ],
+  "check": ["check.js"],
+  "deactivate": ["node", "cleanup.js"],
+  "crashNames": ["clucraft-hl"],
+  "units": [
+    { "name": "clucraft-halflife.socket", "from": "systemd/clucraft-halflife.socket" },
+    { "name": "clucraft-halflife.service", "from": "systemd/clucraft-halflife.service" }
+  ],
+  "enable": [
+    { "unit": "clucraft-halflife.socket", "target": "sockets.target" }
+  ],
+  "recmgr": ["clucraft-halflife"],
+  "restart": ["clucraft-halflife.service"],
+  "versionFiles": ["service.js"]
+}

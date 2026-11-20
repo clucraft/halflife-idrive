@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# (After clucraft-plex.service, clucraft/plex-idrive, from amn-iptv's, M850i-amn/idrive7-apps.)
+[Unit]
+Description=clucraft-halflife: Half-Life (Xash3D FWGS) on the head unit, for the app Half-Life
+RequiresMountsFor=/var/opt
+# Started by the app's connection to the socket, never at boot. It ends by itself a minute after the app's last
+# question while no game runs. Ordered before no head-unit unit, waited for by none.
+Requires=clucraft-halflife.socket
+After=clucraft-halflife.socket
+StartLimitIntervalSec=600
+StartLimitBurst=10
+
+[Service]
+# Never root: the service and the engine it starts run as nobody. mgu-render takes a frame file owned by
+# nobody, and a root process that opens the car's sound device leaves a lock behind that silences other apps
+# until the head unit restarts (the engine refuses to run as root for that reason).
+#   mgu_alsa   the sound device (SmartXbar's CarLife input)
+# Not asked for until they are needed: video (the GPU's render node) and mgu_usb (a gamepad on usbfs).
+User=nobody
+SupplementaryGroups=mgu_alsa
+# Root for the commands around the service only (they keep the limits below, LimitCORE included; no "+"
+# commands): the state folder is made nobody's, the control socket gets the app's group, the frame file goes.
+PermissionsStartOnly=true
+Environment=PATH=/usr/sbin:/usr/bin:/sbin:/bin
+Environment=HLD_STATE=/var/opt/clucraft-halflife/state
+ExecStartPre=-/bin/sh -c 'mkdir -p /var/opt/clucraft-halflife/state && chown nobody /var/opt/clucraft-halflife/state && chmod 0700 /var/opt/clucraft-halflife/state'
+ExecStartPre=-/usr/bin/node /var/opt/clucraft-halflife/current/sockgroup.js
+ExecStart=/usr/bin/node /var/opt/clucraft-halflife/current/service.js
+# however the service ended (stop, crash, kill, the out-of-memory killer): no frame file left behind
+ExecStopPost=-/usr/bin/node /var/opt/clucraft-halflife/current/cleanup.js
+# The app's next connection starts it again; nothing restarts it behind the app's back.
+Restart=no
+# A stop goes to the service alone first: it has the engine save the game and quit (11 s at most, engine.js).
+# Whatever is left after 15 s is killed.
+KillMode=mixed
+TimeoutStopSec=15
+# The HMI, CarPlay and the phone come first.
+Nice=10
+IOSchedulingClass=idle
+# The engine is one thread; with the service beside it, one and a half of the unit's four cores at most.
+CPUQuota=150%
+# The engine needs about 100 MiB in the first chapter. Apps on the head unit share about 1 GiB and are killed
+# when memory runs low, so this stays in a group of its own, with a ceiling.
+MemoryLimit=384M
+TasksMax=32
+# No core dump goes to the crash handler (which restarts the head unit for a program it does not list),
+# so a crash ends the game and never the head unit.
+LimitCORE=1
+StandardOutput=journal
+StandardError=journal

@@ -1,0 +1,40 @@
+clucraft-halflife: the service of the app "Half-Life" for the BMW iDrive 7 (MGU) head unit
+=========================================================================================
+
+An unofficial port. Not affiliated with or endorsed by Valve Corporation or BMW AG. Half-Life is a trademark
+of Valve Corporation; BMW and iDrive are trademarks of BMW AG.
+
+NO GAME DATA IS IN THIS PACKAGE. Half-Life's maps, models, sounds and textures belong to Valve and are not
+distributed here in any form. The service reads the owner's own copy from a USB stick.
+
+What is in it, each under its own licence
+-----------------------------------------
+
+service.js, engine.js, gamedata.js, check.js, cleanup.js, sockgroup.js, systemd/
+    This project's, GPL-3.0-or-later (LICENSE). sockgroup.js, check.js and the units follow clucraft-plex's
+    (clucraft/plex-idrive), which come from amn-iptv's (M850i-amn/idrive7-apps) and aurelmarius/bmw-apps;
+    GPL-3.0-or-later.
+
+bin/clucraft-hl, bin/libxash.so, bin/filesystem_stdio.so, bin/libref_soft.so
+    Xash3D FWGS, https://github.com/FWGS/xash3d-fwgs, GPL-3.0-or-later (LICENSE), built from the commit named in
+    bin/BUILD.json with this project's head-unit backend (port/engine.patch and port/engine/ in the
+    halflife-idrive repository, GPL-3.0-or-later). bin/clucraft-hl is the engine's launcher under a name of its
+    own. Built in from the engine's own source tree (its 3rdparty folder): bzip2 (BSD-style), libogg and
+    libvorbis (BSD-3-Clause), Opus and opusfile (BSD-3-Clause), libmpg123 (LGPL-2.1), Mbed TLS (Apache-2.0),
+    libbacktrace (BSD-3-Clause), MultiEmulator and miniz (MIT). GCC's C++ runtime is linked in under its
+    runtime library exception.
+
+bin/libmenu.so
+    The engine's main menu, https://github.com/FWGS/mainui_cpp, GPL-2.0-or-later.
+
+bin/hl_amd64.so, bin/client_amd64.so
+    The game's server and client libraries, built from https://github.com/FWGS/hlsdk-portable at the commit
+    named in bin/BUILD.json. Half Life 1 SDK LICENSE, Copyright (c) Valve Corp. (bin/LICENSE.hlsdk): free of
+    charge only, with that licence file. They are loaded by the engine at run time and are not part of it.
+
+bin/extras.pk3
+    The engine's own menu art, fonts and presets, https://github.com/FWGS/xash-extras, as the engine's build
+    packs them. The licences of its parts are inside the pack (touch_default/License.txt, logos/license.txt);
+    its fonts are under the SIL Open Font License 1.1.
+
+How to build all of bin/ from source: docs/BUILD.md in the halflife-idrive repository.
