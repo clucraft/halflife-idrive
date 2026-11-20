@@ -26,7 +26,7 @@ console.log = (s) => { if (/^shot /.test(String(s))) quietLog(s); };   // (the s
     save(st, 'app-no-stick');
     await st.close();
 
-    st = await createStage({ carPaths: true, settings: { stats: true }, service: { engine: { env: { FAKE_STAT_MS: '100' } } } });
+    st = await createStage({ carPaths: true, pad: true, settings: { stats: true }, service: { engine: { env: { FAKE_STAT_MS: '100' } } } });
     const S = st.S;
     await st.until(() => S.st && S.st.selftest, 6000, 'the status');
     save(st, 'app-launcher');

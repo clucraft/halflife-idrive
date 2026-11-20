@@ -56,7 +56,16 @@ function createUi(o) {
     }
 
     /* ---------- the launcher ---------- */
-    /** the five things a game needs, each: [colour, name, what is known] */
+    /** the gamepad, as the service sees it. None is no fault (amber): the game starts, and its menus work without */
+    function padRow(p) {
+        if (!p) return [C.amber, 'Gamepad', 'this service reads none'];
+        if (p.program && !p.program.ok) return [C.red, 'Gamepad', 'its reader does not run on this head unit'];
+        if (p.reading) return [C.green, 'Gamepad', (p.name || 'a pad') + ', in use'];
+        if (p.error) return [C.amber, 'Gamepad', p.error];
+        if (p.found) return [C.green, 'Gamepad', (p.name || 'a pad') + ', plugged in'];
+        return [C.amber, 'Gamepad', 'none found: plug in an Xbox One or Series pad on a cable'];
+    }
+    /** what a game needs, each: [colour, name, what is known] */
     function checks() {
         const st = S.st, parked = env.parked();
         const rows = [];
@@ -70,6 +79,7 @@ function createUi(o) {
             rows.push(d.found ? [C.green, 'Game data', d.root] : [d.sticks && d.sticks.length ? C.red : C.amber, 'Game data', d.why || 'not found']);
             const sv = st.saves;
             if (sv) rows.push([C.green, 'Saves', (sv.where === 'stick' ? 'on the stick' : 'on the head unit (' + sv.why + ')') + (sv.canContinue ? ', a saved game is there' : '')]);
+            rows.push(padRow(st.pad));
         }
         rows.push(parked ? [C.green, 'Car', 'parked'] : [C.amber, 'Car', 'not parked: ' + env.parkedWhy()]);
         return rows;
@@ -77,7 +87,7 @@ function createUi(o) {
     function drawHome(cv, A, y0) {
         const colW = Math.min(900, A.w - 560);
         checks().forEach((r, i) => {
-            const y = y0 + i * 56;
+            const y = y0 + i * 52;
             cv.circle(A.x + 12, y + 20, 9, r[0]);
             cv.text(r[1], A.x + 36, y + 28, 23, C.text, B);
             cv.text(fit(cv, r[2], 20, colW - 200, M), A.x + 190, y + 28, 20, r[0] === C.green ? C.grey : r[0], M);
@@ -115,6 +125,7 @@ function createUi(o) {
                 ['Picture', s && s.w ? s.w + ' x ' + s.h : na],
                 ['Sound', !st ? na : !st.sound ? 'off' : !s ? na : s.sound ? 'on' + (s.underruns || s.stands ? ' (ran dry ' + s.underruns + ', stood ' + s.stands + ')' : '') : 'no device'],
                 ['Speakers', (() => { const a = env.audio(); return a.error ? a.error : a.connected ? 'connected' : a.on ? 'connecting' : 'not asked for'; })()],
+                ['Gamepad', padRow(st && st.pad)[2]],
             ]],
             ['The head unit', [
                 ['Engine, CPU', sys && sys.cpu !== null ? sys.cpu + ' % of one core' : na],
@@ -123,23 +134,24 @@ function createUi(o) {
                 ['Load', sys && sys.load !== null ? String(sys.load) : na],
                 ['Memory free', sys && sys.memAvailMb !== null ? sys.memAvailMb + ' MB' : na],
                 ['Car', env.parked() ? 'parked' : env.parkedWhy()],
+                ['Saves', st && st.saves ? (st.saves.where === 'stick' ? 'on the stick' : 'on the head unit') : na],
             ]],
         ];
-        const cw = (A.w - 40) / 2;
+        const cw = (A.w - 40) / 2, rows = 7, pitch = 38, cardH = rows * pitch + 56;
         cols.forEach((col, ci) => {
             const x = A.x + ci * (cw + 40);
-            cv.roundRect(x, y0, cw, 6 * 46 + 62, 14, C.card);
-            cv.text(col[0], x + 22, y0 + 36, 22, C.accent, B);
+            cv.roundRect(x, y0, cw, cardH, 14, C.card);
+            cv.text(col[0], x + 22, y0 + 34, 22, C.accent, B);
             col[1].forEach((r, i) => {
-                const y = y0 + 78 + i * 46;
-                cv.text(r[0], x + 22, y, 20, C.grey, M);
-                cv.text(fit(cv, r[1], 20, cw - 250, B), x + cw - 22, y, 20, C.text, right(B));
+                const y = y0 + 72 + i * pitch;
+                cv.text(r[0], x + 22, y, 19, C.grey, M);
+                cv.text(fit(cv, r[1], 19, cw - 230, B), x + cw - 22, y, 19, C.text, right(B));
             });
         });
-        const y = y0 + 6 * 46 + 62 + 34;
+        const y = y0 + cardH + 30;
         const last = e.error || (e.last ? 'Last ended: ' + e.last.why + (e.last.code ? ' (code ' + e.last.code + ')' : '') : '');
         if (last) cv.text(fit(cv, last, 19, A.w, M), A.x, y, 19, e.error ? C.amber : C.dim, M);
-        cv.text(fit(cv, 'App ' + env.version + (st ? ', service ' + st.version + (st.selftest ? ', ' + st.selftest.line : '') : ''), 17, A.w, M), A.x, y + 30, 17, C.dim, M);
+        cv.text(fit(cv, 'App ' + env.version + (st ? ', service ' + st.version + (st.selftest ? ', ' + st.selftest.line : '') : ''), 17, A.w, M), A.x, y + 26, 17, C.dim, M);
     }
 
     /* ---------- the log ---------- */

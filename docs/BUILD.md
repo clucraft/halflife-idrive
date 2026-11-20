@@ -12,7 +12,7 @@ Everything here runs on the PC. Nothing touches the car, and the game data is on
 
 | Folder | What it is |
 |---|---|
-| `port/` | This project's changes to the engine: `engine.patch` (edits to upstream files), `engine/` (new files), `pins.env` (the upstream commits). |
+| `port/` | This project's changes to the engine: `engine.patch` (edits to upstream files), `engine/` (new files), `pins.env` (the upstream commits). `usbpipe/` is the source of the gamepad's USB program, from nes-idrive. |
 | `native/clucraft-halflife/` | The Store tool: the service and, in `bin/`, the built engine. |
 | `apps/clucraft_halflife/` | The Store app: launcher, game view, status, log. |
 | `kit/` | The MGU App Kit the app is built with, as plex-idrive carries it. |
@@ -45,6 +45,14 @@ bash tools/build/stage.sh
 
 9.8 MB in all.
 
+### The gamepad's program
+
+```sh
+node tools/build/build-pad.js
+```
+
+Builds `bin/clucraft-hl-pad` from `port/usbpipe/main.go` and writes `bin/PAD.json`. It needs Go 1.21 or later and nothing else, and runs on any computer, Windows included. The source is nes-idrive's `nes-usbpipe`, unchanged; with Go 1.26.5 the result is byte for byte the file nes-idrive commits, and `PAD.json` says whether it is. It has another file name here because the head unit's crash handler knows programs by file name. 1.6 MB, static.
+
 ### What the check enforces
 
 - The launcher names the loader at `/lib/ld-linux-x86-64.so.2`, the only place the head unit has it.
@@ -64,7 +72,7 @@ Edit upstream files in `<work>/xash3d-fwgs`, then run `bash tools/build/save-pat
 
 - **Video** (`vid_mgu.c`): no window. The software renderer draws into a buffer, and each finished frame is converted to I420 and written to the next slot of a frame file in the format mgu-render shows (`mgvf.h`). Default size 1280x480; `-width` and `-height` change it.
 - **Sound** (`snd_mgu.c`): ALSA, written for the car's sound service. It opens the device at 48 kHz (`-alsarate`), converts the engine's 44.1 kHz itself, takes whatever buffer the device has, and never waits for it. While the device takes nothing (the car has not connected it to the speakers) the sound is dropped instead of queued. The engine's own ALSA code gave up on a 48 kHz device behind a rate converter, which is what the car has.
-- **Input** (`sys_mgu.c`): nothing opens a device. Keys, pad axes and touch arrive as commands on stdin (`mgu_key`, `mgu_axis`, `mgu_touch`).
+- **Input** (`sys_mgu.c`): nothing opens a device. Keys, pad axes and touch arrive as commands on stdin (`mgu_key`, `mgu_axis`, `mgu_touch`). `mgu_pad 1` says that a gamepad is being read; the engine then applies its own Xbox button layout, once.
 - **Hold** (`sys_mgu.c`): `mgu_hold 1` stops the main loop where it stands: no frame, no game time, no sound, no CPU. `mgu_hold 0` lets it go on as if no time had passed.
 - **Frame rate**: capped at 30 in the backend (`-mgufps`). The engine's own cap steps aside when its vsync setting is on, which is the default.
 - **Life cycle**: SIGTERM, SIGINT and SIGHUP quit the ordinary way (config saved, frame file removed, exit code 0); a second signal ends it at once. When stdin ends, the service is gone and the engine quits. It refuses to run as root.
@@ -76,7 +84,7 @@ Edit upstream files in `<work>/xash3d-fwgs`, then run `bash tools/build/save-pat
 
 | Command | What it runs | Needs |
 |---|---|---|
-| `npm test` | The service with a stand-in engine, the app's pages, `main.js` from the staged package, the manifests | Node, Python 3 |
+| `npm test` | The service with a stand-in engine and a stand-in gamepad, the app's pages, `main.js` from the staged package, the manifests | Node, Python 3 |
 | `bash tools/run/tests-node8.sh` | The same on Node 8, in a container | Docker |
 | `bash tools/run/service.sh` | The real service with the real engine and your game data: picture, sound, input, hold, save, crash, hang | Docker, the game |
 | `bash tools/run/headless.sh <name> <seconds> [args]` | The engine alone, for one picture or a timedemo | Docker, the game |
@@ -93,9 +101,11 @@ All on the PC. None of it has run on the car.
 
 | Test | Result |
 |---|---|
-| `npm test` | 16 of 16 on Node 24 (Windows) and on Node 8.10 (container) |
-| `tools/run/service.sh` | 35 of 35 checks, with the 25th-anniversary Steam data |
+| `npm test` | 18 of 18 on Node 24 (Windows) and on Node 8.10 (container) |
+| `tools/run/service.sh` | 41 of 41 checks, with the 25th-anniversary Steam data |
 | App in the kit's emulator | Launcher, start, game view, "not parked" hold, return to the launcher: all seen working |
+
+The emulator is not the car: on the owner's car only the GPU renderer's path shows a picture, and only an app's first canvas screen (RECON.md, section 4). The emulator shows more than that.
 
 What the run with the real engine showed:
 
@@ -110,6 +120,8 @@ What the run with the real engine showed:
 | The app goes away | The game is saved and ended after the set time |
 | Crash (SIGSEGV) | Exit code 139 within seconds, no core file, no frame file, the report in the log |
 | Hang (SIGSTOP) | Ended by the service, with SIGKILL as the last step |
+| Gamepad (a stand-in for the pad's USB packets, the real engine) | The engine applies its Xbox layout; the right stick turns, the left stick walks; Menu opens the game's menu and B closes it; D-pad and A start a new game from the game's own menu |
+| Gamepad's USB program | Runs in the container; byte for byte nes-idrive's file |
 | What the engine wrote | 0.1 MB: config, one save, an id file |
 
 The head unit's Atom is several times slower per core than the PC. 2.5 ms a frame here says the software renderer has room at 30 frames a second, not that the car reaches it. That is Phase 3's to measure.

@@ -9,6 +9,7 @@ Sources are marked like this:
 | Mark | Meaning |
 |---|---|
 | **[car]** | Read from this head unit, read-only. So far only the nes-idrive controller probe. |
+| **[owner]** | The owner reports it from this car, from running another of their apps there. |
 | **[other car]** | Another owner documented it from their own car. Firmware and kernel differ from ours (theirs `4.14.147-apl`, ours `4.14.198-apl`). |
 | **[code]** | What reference code does. It shows what its author expected of the unit, not that it ran there. |
 | **[doc]** | A README or protocol document says so. |
@@ -77,7 +78,10 @@ The frame file is real and specified, but it is a video path, not a framebuffer.
 - **Full screen** [code]: a layer placed at 0,0 1920x720 covers the HMI including its status strip and back column. An app is shown only while it is the front app, and layers yield to the camera surfaces.
 - **Watchdog** [code]: the renderer hides a layer whose app sends nothing for 3 s. New video frames do not count, so the app must send at least one message a second.
 - **Two renderers, two kits** [code]: the Store's `mgu-render` and the kit's `idrive7-renderd` are the same program under two names and sockets. The `video` operation in the JavaScript client exists in the M850i-amn fork of the kit that plex-idrive copies and in mgu-render's own client, not in the upstream kit runtime.
-- **Seen working?** plex-idrive has not run on a car [doc]. Vizualyse's notes say video on the frame file worked on their unit, and moonride streams through it on a G05 [other car]. No measured frame rate or copy cost on an iDrive 7 car was found anywhere.
+- **Seen working?** Yes, on this car: plex-idrive plays video through the frame file here [owner, 2026-11-19]. Vizualyse's notes say the same of their unit, and moonride streams through it on a G05 [other car]. No measured frame rate or copy cost on an iDrive 7 car was found anywhere.
+
+- **What does not show on this car** [owner, 2026-11-19, from nes-idrive]: every picture an app pushes to the HMI directly is refused (RHMI image updates fail with `INVALID_MODELID`). Only what goes through the GPU renderer shows. The kit's renderer path serves the first canvas screen of an app only; a second drawn screen stays blank. The PC emulator shows neither problem. So an app draws everything on one canvas screen and requires a renderer. This project's app does: one screen, with the launcher, status and log as pages on it; the game is a second connection to the renderer, as plex-idrive's player is.
+- **An app's log on the head unit** [owner]: a plain file, `/var/opt/public/oap/oap_<uid>/data/<app id>.log`.
 
 Other pixel routes in the same renderer protocol [code]: opaque or premultiplied RGBA pixmaps and INDEX8 pixmaps up to 2048 a side with region updates, sent over the socket (24 MiB message limit). The kit's Doom uses image uploads at up to 1920x504.
 
@@ -89,6 +93,7 @@ Consequences:
 ## 5. Sound path
 
 - **Route** [code]: the app asks the GENIVI audio manager over SOME/IP (`org.genivi.am.commandinterface.CommandControl`) to connect source 287 ("CarLife") to sink 1024 (front media), after marking the source available through the routing interface. Without that step the connect never completes [other car]. plex-idrive, moonride and Vizualyse all do it this way.
+- **On this car** [owner, 2026-11-19]: plex-idrive's sound plays through this route here. Its player runs as `nobody` with the groups `video` and `mgu_alsa`, so that user and those groups exist on this unit. This project's app uses the same module for the route; its engine's sound code is its own and has not run here.
 - **Device** [code]: ALSA `plug:smartx:CarLifeMedia_CF_48_STEREO`, S16LE stereo, 48 kHz native. There is no `default` device and no `aplay` on the unit [other car].
 - **Buffering** [other car]: SmartXbar imposes three periods of 1024 frames (64 ms).
 - **Access** [code]: group `mgu_alsa`. moonride's whole service runs as `nobody` with `video`, `mgu_usb` and `mgu_alsa` as supplementary groups.
@@ -103,6 +108,8 @@ Consequences:
 - **Gamepad**: the kernel has no input layer [car] and accepts no unsigned modules [other car], so no pad ever produces `/dev/input` nodes and the engine's evdev code is useless here. The only route is a userspace reader on usbfs with group `mgu_usb`.
 - **What exists** [code]: moonride and Vizualyse both read Xbox 360-protocol pads (interface class `ff/5d/01`) through usbfs ioctls, with a start-up LED packet; an 8BitDo adapter in X-input mode and a Flydigi pad are reported working [other car]. Neither supports Xbox One "GIP" pads. nes-idrive's reader does GIP, with start-up packets taken from the kernel's `xpad.c`, and has run only against a stand-in.
 - **The owner's pad** is an Xbox One S pad [car], which is GIP: it needs the start-up handshake before it reports anything. Supporting both protocols is the safe plan.
+- **Proven on this car** [owner, 2026-11-19]: nes-idrive's reader (branch `mgu-store`) plays its NES app with that pad on this unit, installed through the Store. A small static program passes one USB interface's packets through usbfs as lines of hex; `pad.js` holds the GIP protocol. Seen from the real pad: buttons, D-pad, both sticks and the right trigger. Not seen from it: the left trigger and the stick clicks (they follow the kernel's `xpad.c`). Not proven: any other pad, input delay, rumble.
+- **This project** carries a copy of both (`native/clucraft-halflife/pad.js`, `port/usbpipe/`): the program is byte for byte nes-idrive's, under a file name of its own, and the service runs it as `nobody` with the group `mgu_usb`. nes-idrive ran it as the app's user with the node's group; that difference has not run on the car.
 - **iDrive controller** [code]: SOME/IP field `statusRotaryEncoderState` of `de.bmw.infotainment.controlelements.FrontCCU` (turn counter, press, tilt). With the `mgu-inputgate` tool installed an app can hold the controller so the HMI stops reacting. That tool is preloaded into the HMI by its own Store package, and the brief allows nothing beyond it.
 - **Touch**: the display's touch packets reach an app only if it claims regions through the renderer. One owner reports two unit restarts after claiming touch on older firmware and forbids it; moonride and the Store rely on it on newer firmware [other car, conflicting]. The first versions should not claim touch at all.
 - **BACK, MENU, HOME** always stay with the HMI [code].
@@ -282,7 +289,7 @@ Pending.
 | Add a video backend under `engine/platform/linux` | The non-SDL Linux client there is broken and has no GL path | A backend directory of our own, following the porting guide; reuse `s_alsa.c` |
 | Frames to the mgu-render frame file | The file is YUV 4:2:0 video; seen working on other cars, not on this one | Keep it as the plan and convert in the backend; RGBA pixmaps over the socket are the fallback |
 | Start at 1280x720 or lower | The screen is 1920x720 | Start at 1280x480, capped at 30 fps |
-| Input from the gamepad (evdev) | No input layer in the kernel, and no way to add one | A usbfs reader of our own for Xbox 360 and Xbox One pads; controller forwarded by the app |
+| Input from the gamepad (evdev) | No input layer in the kernel, and no way to add one | A usbfs reader in the service: nes-idrive's, which reads Xbox One and Series pads and is proven on this car; controller forwarded by the app |
 | Touch for menus | Claiming touch restarted one owner's unit twice | No touch in the first versions |
 | Game data on a USB stick | Sticks mount read-only and noexec on another car; unverified here | Read the data from the stick with `-rodir`; the stick test confirms |
 | Saves on the stick if writable, otherwise the app's data folder | The stick is read-only as mounted, and the app's data folder is wiped when its process dies | Saves in the tool's own folder under `/var/opt`. Remounting the stick read-write is possible but changes a system mount |
@@ -308,6 +315,6 @@ For the probe:
 
 For the owner:
 
-1. Has the frame-file path or the CarLife sound route ever worked on this car?
-2. Xbox One S pad only, or is an Xbox 360-protocol pad or adapter available too?
+1. ~~Has the frame-file path or the CarLife sound route ever worked on this car?~~ Answered 2026-11-19: both work here, in plex-idrive.
+2. ~~Xbox One S pad only, or is an Xbox 360-protocol pad or adapter available too?~~ The Xbox One S pad works here through nes-idrive's reader, which this project now carries. Other pads are not read.
 3. Are saves under `/var/opt` acceptable, given that the stick is read-only as mounted?

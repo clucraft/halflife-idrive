@@ -1,7 +1,7 @@
 {
   "id": "clucraft_halflife",
   "title": "Half-Life",
-  "description": "Half-Life (1998) running on the head unit itself, on the centre screen, while the car is parked: the Xash3D FWGS engine with your own game data. An unofficial port, not affiliated with Valve or BMW. No game data is included: copy the valve folder of your own copy of Half-Life to a USB stick and plug it in. The picture shows only while the car is parked (selector in P, standing); the game stands still the moment it is not. Sound plays on the car's speakers. The iDrive controller works the game's menus; playing needs a USB gamepad. Needs the Half-Life service and a GPU renderer from the Store.",
+  "description": "Half-Life (1998) running on the head unit itself, on the centre screen, while the car is parked: the Xash3D FWGS engine with your own game data. An unofficial port, not affiliated with Valve or BMW. No game data is included: copy the valve folder of your own copy of Half-Life to a USB stick and plug it in. The picture shows only while the car is parked (selector in P, standing); the game stands still the moment it is not. Sound plays on the car's speakers. The iDrive controller works the game's menus; playing needs a USB gamepad: an Xbox One or Series pad on a cable. Needs the Half-Life service and a GPU renderer from the Store.",
   "version": "0.1.0",
   "vendor": "custom",
   "loggingId": "HLIF",
